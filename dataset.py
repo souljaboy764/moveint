@@ -4,9 +4,9 @@ import numpy as np
 from torch.utils.data import Dataset
 from mild_hri.utils import downsample_trajs
 
+# P1 - Giver, P2 - Receiver. Currently commented out object trajectories due to inconsistency in object marker location. Can be mitigated as post-processing but haven't done that yet.
 class HumanHandoverDataset(Dataset):
 	def __init__(self, args, train):
-		device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 		with np.load(args.src, allow_pickle=True) as data:
 			if train:
 				p1_trajs, p2_trajs, object_trajs, self.labels = data['train_data']
@@ -14,12 +14,6 @@ class HumanHandoverDataset(Dataset):
 				p1_trajs, p2_trajs, object_trajs, self.labels = data['test_data']
 			joints = data['joints']
 			joints_dic = {joints[i]:i for i in range(len(joints))}
-				
-			if args.downsample is not None and args.downsample!=0:
-				p1_trajs = downsample_trajs(p1_trajs, args.downsample)
-				p2_trajs = downsample_trajs(p2_trajs, args.downsample)
-				object_trajs = np.array([object_traj[:,0] for object_traj in downsample_trajs([object_traj[:, None] for object_traj in object_trajs], downsample)], dtype=object)
-			
 			self.input_data = []
 			self.output_data = []
 			for i in range(len(p1_trajs)):
@@ -43,8 +37,8 @@ class HumanHandoverDataset(Dataset):
 										p2_lhand_trajs, 
 										p2_rhand_vels, 
 										p2_lhand_vels, 
-										p1_rhand_objdist, 
-										p2_lhand_objdist, 
+										# p1_rhand_objdist, 
+										# p2_lhand_objdist, 
 										p1r_p2l_dist,
 									], axis=-1))
 				
@@ -54,7 +48,7 @@ class HumanHandoverDataset(Dataset):
 										# p1_rhand_vels, 
 										# p1_lhand_vels,
 									], axis=-1))
-			
+
 			self.input_data = np.array(self.input_data, dtype=object)
 			self.output_data = np.array(self.output_data, dtype=object)
 			self.input_dims = self.input_data[0].shape[-1]

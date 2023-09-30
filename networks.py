@@ -90,23 +90,6 @@ class GRUMixtureDensityNet(BaseNet):
 		enc, hidden = self._encoder(hidden)
 		return self.policy(enc), self.policy_std(enc).exp() + self.std_reg, self.segment_logits(enc), hidden
 
-class GRUNet(BaseNet):
-	def __init__(self:BaseNet, input_dim:int, output_dim:int, args:argparse.ArgumentParser) -> None:
-		super().__init__(input_dim, output_dim, args)
-
-		self._encoder = nn.GRU(input_size=input_dim, hidden_size=self.hidden_sizes[0], num_layers=len(self.hidden_sizes), batch_first=True)
-		
-		self.policy = nn.Linear(self.hidden_sizes[0], self.output_dim)
-		self.segment_logits = nn.Linear(self.hidden_sizes[0], 3) # reach, transfer, retreat
-
-	def forward(self:BaseNet, x:torch.Tensor) -> (torch.Tensor,torch.Tensor):
-		enc,_ = self._encoder(x)
-		return self.policy(enc), None, self.segment_logits(enc)
-	
-	def forward_step(self:BaseNet, x:torch.Tensor, hidden:torch.Tensor=None) -> (torch.Tensor,torch.Tensor,torch.Tensor):
-		enc, hidden = self._encoder(hidden)
-		return self.policy(enc), self.segment_logits(enc), hidden
-
 class RMDVAE(BaseNet):
 	def __init__(self:BaseNet, input_dim:int, output_dim:int, args:argparse.ArgumentParser) -> None:
 		super().__init__(input_dim, output_dim, args)
@@ -137,7 +120,6 @@ class RMDVAE(BaseNet):
 			dec_layers.append(nn.Linear(dec_sizes[i], dec_sizes[i+1]))
 			dec_layers.append(self.activation)
 		self.robot_decoder = nn.Sequential(*dec_layers)
-		
 
 	def forward(self:BaseNet, x_in:torch.Tensor, x_out:torch.Tensor=None) -> (torch.Tensor,torch.Tensor,torch.Tensor):
 		h_enc = self.human_encoder(x_in)

@@ -122,8 +122,6 @@ def training_argparse(args=None):
 			 			help='Activation Function for the hidden layers')
 	
 	# Training args
-	parser.add_argument('--loss', default='mse', type=str, choices=['mse', 'nll', 'mc_mse'],
-			 			help='Loss Function for training the prediction (mse, nll or mc_mse). default: mse')
 	parser.add_argument('--grad-clip', type=float, default=None, metavar='CLIP',
 						help='Value to clip gradients at (default: None)')
 	parser.add_argument('--epochs', type=int, default=200, metavar='EPOCHS',

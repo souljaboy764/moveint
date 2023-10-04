@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
-from torch.distributions import kl_divergence, Normal
+from torch.distributions import *
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
@@ -15,11 +15,15 @@ from utils import *
 from dataset import HumanHandoverDataset
 import networks
 
+
 def run_iteration(iterator:DataLoader, model:networks.RMDVAE, optimizer:torch.optim.Optimizer, args:argparse.ArgumentParser, epoch:int):
 	mse_loss, bce_loss, ae_loss, kl_loss = [], [], [], []
+	
 	for i, (x_in, x_out, label) in enumerate(iterator):
 		if model.training:
 			optimizer.zero_grad()
+			with torch.no_grad():
+				model.transitions.copy_(nn.Sigmoid()(model.transitions))
 
 		label_dist = np.array([np.sum(label[0].numpy()==0), np.sum(label[0].numpy()==1), np.sum(label[0].numpy()==2)])
 		w = 1/label_dist
@@ -28,40 +32,43 @@ def run_iteration(iterator:DataLoader, model:networks.RMDVAE, optimizer:torch.op
 		x_in = torch.Tensor(x_in[0]).to(device)
 		x_out = torch.Tensor(x_out[0]).to(device)
 		label_onehot = torch.eye(3, device=device)[label[0]]
-		h_mean, h_std, h_alpha, r_mean, r_std, r_out_r, r_out_h = model(x_in, None)
-
-		# ae_recon = ((r_out_r - x_out)**2).sum(-1)
+		label = torch.Tensor(label[0]).to(device)
+		h_mean, h_alpha, r_mean, r_std, r_out_r, r_out_h = model(x_in, x_out)
+		
+		kld = kl_divergence(Normal(r_mean, r_std), Normal((h_mean*label_onehot[:, None]).sum(-1), (model.human_std*label_onehot[:, None]).sum(-1))).mean(-1)
+		
+		ae_recon = ((r_out_r - x_out)**2).sum(-1)
 		pred_mse = ((r_out_h - x_out)**2).sum(-1)
 		if model.training:
-			# ae_recon = ae_recon.mean(0)
+			ae_recon = ae_recon.mean(0)
 			pred_mse = pred_mse.mean(0)
-		# kld = kl_divergence(Normal(r_mean, r_std), Normal((h_mean*label_onehot[:, None]).sum(-1), (h_std*label_onehot[:, None]).sum(-1))).mean(-1)
 
-		# interclass_dist = (h_mean[..., 0] - h_mean[..., 1])**2 + (h_mean[..., 2] - h_mean[..., 1])**2 + (h_mean[..., 0] - h_mean[..., 2])**2
-		# interclass_dist = torch.clip(interclass_dist.mean(-1)/3, 0, 1)
+		interclass_dist = (
+							torch.exp(-((h_mean[..., 0] - h_mean[..., 1])**2).sum(-1)) + \
+							torch.exp(-((h_mean[..., 2] - h_mean[..., 1])**2).sum(-1)) + \
+							torch.exp(-((h_mean[..., 0] - h_mean[..., 2])**2).sum(-1))
+		)/3
 
-		# intraclass_dist = ((torch.diff(h_mean, dim=0, prepend=h_mean[0:1]))**2).mean(-1).mean(-1)
+		intraclass_dist = torch.exp(-((torch.diff(h_mean, dim=0, prepend=h_mean[0:1]))**2).sum(-2)).mean(-1)
 		
-		# TODO: Implement cosine similarity loss as in https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=9506759
-
-
-		kld = intraclass_dist - interclass_dist
-		
-		bce = F.binary_cross_entropy_with_logits(h_alpha, label_onehot, weight=w, reduction='none').sum(-1)
+		kld += intraclass_dist - interclass_dist
+		if model.training:
+			bce = F.binary_cross_entropy_with_logits(h_alpha, label_onehot, weight=w, reduction='none').sum(-1)
+		else:
+			bce = (h_alpha.argmax(1) == label).to(float)
 
 		if i==0:
 			mse_loss = pred_mse
-			# ae_loss = ae_recon
+			ae_loss = ae_recon
 			kl_loss = kld
 			bce_loss = bce
 		else:
 			mse_loss = torch.cat([mse_loss, pred_mse])
-			# ae_loss = torch.cat([ae_loss, ae_recon])
+			ae_loss = torch.cat([ae_loss, ae_recon])
 			kl_loss = torch.cat([kl_loss, kld])
 			bce_loss = torch.cat([bce_loss, bce])
 
-		# loss = ae_recon + pred_mse + bce + args.beta*kld
-		loss = pred_mse + bce + args.beta*kld
+		loss = ae_recon + pred_mse + bce + args.beta*kld
 		loss = loss.mean()
 		if model.training:
 			loss.backward()
@@ -70,7 +77,6 @@ def run_iteration(iterator:DataLoader, model:networks.RMDVAE, optimizer:torch.op
 	return mse_loss, bce_loss, ae_loss, kl_loss
 
 args = training_argparse()
-assert not (args.model == 'FeedFwdNet' and args.loss!='mse')
 print('Random Seed',args.seed)
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
@@ -129,7 +135,7 @@ for epoch in range(global_epochs, args.epochs):
 		writer.add_scalar('train/pred_mse', torch.mean(mse_train), epoch)
 		writer.add_scalar('train/alpha_bce', torch.mean(bce_train), epoch)
 		writer.add_scalar('test/pred_mse', torch.mean(mse_test), epoch)
-		writer.add_scalar('test/alpha_bce', torch.mean(bce_test), epoch)
+		writer.add_scalar('test/accuracy', torch.mean(bce_test), epoch)
 		# writer.add_scalar('train/recon', torch.mean(ae_train), epoch)
 		# writer.add_scalar('test/recon', torch.mean(ae_test), epoch)
 		writer.add_scalar('train/kld', torch.mean(kl_train), epoch)

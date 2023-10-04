@@ -24,10 +24,8 @@ args = training_argparse()
 ckpt = torch.load(args.ckpt)
 training_args = ckpt['args']
 
-print("Reading Data")
 test_iterator = DataLoader(HumanHandoverDataset(training_args, train=False), batch_size=1, shuffle=False)
 
-print("Creating Model and Optimizer")
 model = networks.RMDVAE(test_iterator.dataset.input_dims, test_iterator.dataset.output_dims, training_args).to(device)
 model.load_state_dict(ckpt['model'])
 model.eval()
@@ -42,7 +40,7 @@ for i, (x_in, x_out, label) in enumerate(test_iterator):
 	label = label[0]
 
 	with torch.no_grad():
-		h_mean, h_std, h_alpha, r_mean, r_std, r_out_r, r_out_h = model(x_in, None)
+		h_mean, h_alpha, r_mean, r_std, r_out_r, r_out_h = model(x_in, x_out)
 	
 	pred_mse = ((r_out_h - x_out)**2).mean(-1)
 	hand_preds.append(r_out_h.cpu().numpy())

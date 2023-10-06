@@ -1,11 +1,9 @@
-import torch
 import numpy as np
 
 from torch.utils.data import Dataset
-from mild_hri.utils import downsample_trajs
 
 # P1 - Giver, P2 - Receiver. Currently commented out object trajectories due to inconsistency in object marker location. Can be mitigated as post-processing but haven't done that yet.
-class HumanHandoverDataset(Dataset):
+class AlapDataset(Dataset):
 	def __init__(self, args, train):
 		with np.load(args.src, allow_pickle=True) as data:
 			if train:
@@ -39,7 +37,7 @@ class HumanHandoverDataset(Dataset):
 										p2_lhand_vels, 
 										# p1_rhand_objdist, 
 										# p2_lhand_objdist, 
-										p1r_p2l_dist,
+										# p1r_p2l_dist,
 									], axis=-1))
 				
 				self.output_data.append(np.concatenate([

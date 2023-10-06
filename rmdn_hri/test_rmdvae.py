@@ -40,7 +40,7 @@ for i, (x_in, x_out, label) in enumerate(test_iterator):
 	label = label[0]
 
 	with torch.no_grad():
-		h_mean, h_alpha, r_mean, r_std, r_out_r, r_out_h = model(x_in, x_out)
+		h_mean, h_alpha, r_mean, r_std, r_out_r, r_out_h = model(x_in, None)
 	
 	pred_mse = ((r_out_h - x_out)**2).mean(-1)
 	hand_preds.append(r_out_h.cpu().numpy())

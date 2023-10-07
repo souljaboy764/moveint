@@ -1,79 +1,144 @@
 import numpy as np
+import scipy.ndimage
 import glob
 import os
 import csv
 
-# from utils import *
+from rmdn_hri.utils import *
+from mild_hri.utils import *
 import zipfile
 
-def preproc_files_list(files):
-	p1_trajs = []
-	p2_trajs = []
-	object_trajs = []
-	labels = []
-	for f_csv in files:
-		p1_name = os.path.basename(f_csv).split('_')[0]
-		p2_name = os.path.basename(f_csv).split('_')[1]
-		p1_body_keys = [f'Bone:{p1_name}:{joint}:Position' for joint in joints]
-		p2_body_keys = [f'Bone:{p2_name}:{joint}:Position' for joint in joints]
-		p1_traj = []
-		p2_traj = []
-		object_traj = []
-		label = []
-		reader = csv.DictReader(open(f_csv))
-		try:
-			for row in reader:
-				p1_traj.append([])
-				p2_traj.append([])
-				for k in p1_body_keys:
-					p1_traj[-1].append([-float(row[k+':X']), float(row[k+':Z']), float(row[k+':Y'])])
-				for k in p2_body_keys:
-					p2_traj[-1].append([-float(row[k+':X']), float(row[k+':Z']), float(row[k+':Y'])])
-				object_traj.append([-float(row[object_key+':X']), float(row[object_key+':Z']), float(row[object_key+':Y'])])
-				label.append(label_idx[row['Giver']])
-			p1_traj = np.array(p1_traj, dtype=np.float32)
-			p2_traj = np.array(p2_traj, dtype=np.float32)
-			object_traj = np.array(object_traj, dtype=np.float32)
-			origin = p1_traj[0:1, joints_dic["RUArm"]].copy()
-			for t in range(p1_traj.shape[0]):
-				p1_traj[t] = p1_traj[t] - origin
-				p2_traj[t] = p2_traj[t] - origin
-			object_traj = object_traj - origin
-			p1_trajs.append(p1_traj)
-			p2_trajs.append(p2_traj)
-			object_trajs.append(object_traj)
-			labels.append(np.array(label, dtype=int))
-		except Exception as e:
-			print(f'Error encountered: {e.__str__()}\nSkipping file {f_csv}')
-	p1_trajs = np.array(p1_trajs, dtype=object)
-	p2_trajs = np.array(p2_trajs, dtype=object)
-	object_trajs = np.array(object_trajs, dtype=object)
-	labels = np.array(labels, dtype=object)
-	print(p1_trajs.shape, p2_trajs.shape, object_trajs.shape, labels.shape)
-	return p1_trajs, p2_trajs, object_trajs, labels
+def rotation_normalization(skeleton):
+	leftShoulder = skeleton[1]
+	rightShoulder = skeleton[2]
+	waist = skeleton[0]
+	
+	xAxisHelper = waist - rightShoulder
+	yAxis = leftShoulder - rightShoulder # right to left
+	xAxis = np.cross(xAxisHelper, yAxis) # out of the human(like an arrow in the back)
+	zAxis = np.cross(xAxis, yAxis) # like spine, but straight
+	
+	xAxis /= np.linalg.norm(xAxis)
+	yAxis /= np.linalg.norm(yAxis)
+	zAxis /= np.linalg.norm(zAxis)
 
+	return np.array([[xAxis[0], xAxis[1], xAxis[2]],
+					 [yAxis[0], yAxis[1], yAxis[2]],
+					 [zAxis[0], zAxis[1], zAxis[2]]])
 
-train_dirs = ['Pair'+str(i) for i in range(1,10)]
-test_dirs = ['Pair'+str(i) for i in range(10,13)]
+# train_dirs = ['Pair'+str(i) for i in range(1,10)]
+# test_dirs = ['Pair'+str(i) for i in range(10,13)]
 
-train_files = []
-for d in train_dirs:
-	files = glob.glob(f'data/parag_dataset_git/dataset_pairwise/{d}/Setting1/*/*.zip')
-	files.sort()
-	train_files += files
-	files = glob.glob(f'data/parag_dataset_git/dataset_pairwise/{d}/Setting2/*/*.zip')
-	files.sort()
-	train_files += files
+# train_files = []
+# for d in train_dirs:
+# 	files = glob.glob(f'data/parag_dataset_git/dataset_pairwise/{d}/Setting1/*/*.zip')
+# 	files.sort()
+# 	train_files += files
+# 	files = glob.glob(f'data/parag_dataset_git/dataset_pairwise/{d}/Setting2/*/*.zip')
+# 	files.sort()
+# 	train_files += files
 
-for f in train_files:
-	with zipfile.ZipFile(f, 'r') as zip_ref:
-		zip_ref.extractall('data/parag_dataset/')
+# for f in train_files:
+# 	with zipfile.ZipFile(f, 'r') as zip_ref:
+# 		zip_ref.extractall('data/parag_dataset/')
 
 # test_files = []
 # for d in test_dirs:
-# 	files = glob.glob(f'data/Bimanual Handovers Dataset/{d}/OptiTrack_Global_Frame/*double*.csv')
+# 	files = glob.glob(f'data/parag_dataset_git/dataset_pairwise/{d}/Setting1/*/*.zip')
 # 	files.sort()
 # 	test_files += files
-# test_data = preproc_files_list(test_files)
+# 	files = glob.glob(f'data/parag_dataset_git/dataset_pairwise/{d}/Setting2/*/*.zip')
+# 	files.sort()
+# 	test_files += files
 
-# np.savez_compressed('data/data_raw.npz', train_data=train_data, test_data=test_data, joints=joints)
+# for f in test_files:
+# 	with zipfile.ZipFile(f, 'r') as zip_ref:
+# 		zip_ref.extractall('data/parag_dataset/')
+
+train_dirs = ['*P'+str(i)+'*' for i in range(1,10)]
+test_dirs = ['*P'+str(i)+'*' for i in range(10,13)]
+
+joints = ['hip', 'LShoulder', 'RShoulder', 'RFArm', 'RUArm', 'RHand']
+
+train_scenes = []
+for d in train_dirs:
+	files = glob.glob(f'data/parag_dataset/{d}/*')
+	files.sort()
+	train_scenes += files
+
+test_scenes = []
+for d in test_dirs:
+	files = glob.glob(f'data/parag_dataset/{d}/*')
+	files.sort()
+	test_scenes += files
+
+train_trajs = []
+test_trajs = []
+def preproc(scenes):
+	giver_trajs = []
+	taker_trajs = []
+	robot_trajs = []
+	labels = []
+	for f in scenes:
+		print(f)
+		giver_traj = []
+		taker_traj = []
+		for j in joints:
+			reader = csv.DictReader(open(os.path.join(f,f'giver_{j}_pose_saved.csv')))
+			giver_traj.append([])
+			for row in reader:
+				giver_traj[-1].append([float(row['x']), float(row['y']), float(row['z'])])
+			
+			reader = csv.DictReader(open(os.path.join(f,f'taker_{j}_pose_saved.csv')))
+			taker_traj.append([])
+			for row in reader:
+				taker_traj[-1].append([float(row['x']), float(row['y']), float(row['z'])])
+
+		giver_traj = np.array(giver_traj).transpose((1,0,2))[::4]
+		taker_traj = np.array(taker_traj).transpose((1,0,2))[::4]
+		R_taker = rotation_normalization(taker_traj[0])
+		o_taker = taker_traj[0, 2].copy()
+		R_giver = rotation_normalization(taker_traj[0])
+		o_giver = giver_traj[0, 2].copy()
+		robot_traj = []
+		T = giver_traj.shape[0]
+		for t in range(T):
+			robot_traj.append(joint_angle_extraction(R_giver.dot((giver_traj[t] - o_giver).T).T))
+
+			giver_traj[t] = R_taker.dot((giver_traj[t] - o_taker).T).T
+			taker_traj[t] = R_taker.dot((taker_traj[t] - o_taker).T).T
+		robot_traj = np.array(robot_traj)
+
+		giver_force_data = []
+		reader = csv.DictReader(open(os.path.join(f,'Wrench_giver_saved.csv')))
+		for row in reader:
+			giver_force_data.append([float(row['Fx']), float(row['Fy']), float(row['Fz'])])
+
+		giver_force_data = scipy.ndimage.uniform_filter1d(np.linalg.norm(np.array(giver_force_data), axis=-1),20)
+
+		taker_force_data = []
+		reader = csv.DictReader(open(os.path.join(f,'Wrench_taker_saved.csv')))
+		for row in reader:
+			taker_force_data.append([float(row['Fx']), float(row['Fy']), float(row['Fz'])])
+		taker_force_data = scipy.ndimage.uniform_filter1d(np.linalg.norm(np.array(taker_force_data), axis=-1),20)
+		
+		force_threshold = 1
+		start_idx = 300 + np.where(taker_force_data[300:400]>force_threshold)[0][0]
+		end_idx = 400+np.where(giver_force_data[400:500]>force_threshold)[0][-1]
+		
+		label = np.zeros(T)
+		label[start_idx:end_idx] = 1
+		label[end_idx:] = 2
+
+		giver_trajs.append(giver_traj)
+		taker_trajs.append(taker_traj)
+		robot_trajs.append(robot_traj)
+		labels.append(label)
+	giver_trajs = np.array(giver_trajs)
+	taker_trajs = np.array(taker_trajs)
+	robot_trajs = np.array(robot_trajs)
+	labels = np.array(labels)
+	print(giver_trajs.shape, taker_trajs.shape, robot_trajs.shape, labels.shape)
+	return giver_trajs, taker_trajs, robot_trajs, labels
+
+np.savez_compressed('data/parag_dataset.npz', train_data = preproc(train_scenes), test_data = preproc(test_scenes), joints=joints)

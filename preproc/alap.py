@@ -3,7 +3,25 @@ import glob
 import os
 import csv
 
-from utils import *
+from rmdn_hri.utils import *
+
+def rotation_normalization(skeleton):
+	leftShoulder = skeleton[1]
+	rightShoulder = skeleton[2]
+	waist = skeleton[0]
+	
+	xAxisHelper = waist - rightShoulder
+	yAxis = leftShoulder - rightShoulder # right to left
+	xAxis = np.cross(xAxisHelper, yAxis) # out of the human(like an arrow in the back)
+	zAxis = np.cross(xAxis, yAxis) # like spine, but straight
+	
+	xAxis /= np.linalg.norm(xAxis)
+	yAxis /= np.linalg.norm(yAxis)
+	zAxis /= np.linalg.norm(zAxis)
+
+	return np.array([[xAxis[0], xAxis[1], xAxis[2]],
+					 [yAxis[0], yAxis[1], yAxis[2]],
+					 [zAxis[0], zAxis[1], zAxis[2]]])
 
 def preproc_files_list(files):
 	p1_trajs = []
@@ -33,11 +51,36 @@ def preproc_files_list(files):
 			p1_traj = np.array(p1_traj, dtype=np.float32)
 			p2_traj = np.array(p2_traj, dtype=np.float32)
 			object_traj = np.array(object_traj, dtype=np.float32)
-			origin = p1_traj[0:1, joints_dic["RUArm"]].copy()
+			# R = rotation_normalization([p2_traj[0, joints_dic["Hip"]], p2_traj[0, joints_dic["LShoulder"]], p2_traj[0, joints_dic["RShoulder"]]])
+			# R = np.eye(3)
+			# for t in range(p1_traj.shape[0]):
+			# 	p1_traj[t] = R.dot(p1_traj[t].T).T
+			# 	p2_traj[t] = R.dot(p2_traj[t].T).T
+			# object_traj = R.dot(object_traj.T).T
+
+			if p1_traj[0, joints_dic["LHand"], 0] > p2_traj[0, joints_dic["RHand"], 0]:
+				p1_traj[:, :, 0] *= -1
+				p2_traj[:, :, 0] *= -1
+				object_traj[:, 0] *= -1
+
+				p1_traj[:, :, 1] *= -1
+				p2_traj[:, :, 1] *= -1
+				object_traj[:, 1] *= -1
+
+			origin = p1_traj[0:1, joints_dic["Hip"]].copy()
+			offset = np.array([1,0,0.3])
 			for t in range(p1_traj.shape[0]):
-				p1_traj[t] = p1_traj[t] - origin
+				p1_traj[t] = p1_traj[t] - origin + offset
 				p2_traj[t] = p2_traj[t] - origin
-			object_traj = object_traj - origin
+			object_traj = object_traj - origin + offset
+
+			p1_traj[:, :, 0] *= 0.5
+			object_traj[:, 0] *= 0.5
+
+			p2_traj[:, :, 0] += 0.1
+			p2_traj[:, :, 2] *= 1.2
+			p2_traj[:, :, 2] += 0.1
+
 			p1_trajs.append(p1_traj)
 			p2_trajs.append(p2_traj)
 			object_trajs.append(object_traj)
@@ -69,4 +112,4 @@ for d in test_dirs:
 	test_files += files
 test_data = preproc_files_list(test_files)
 
-np.savez_compressed('data/data_raw.npz', train_data=train_data, test_data=test_data, joints=joints)
+np.savez_compressed('data/alap_dataset.npz', train_data=train_data, test_data=test_data, joints=joints)

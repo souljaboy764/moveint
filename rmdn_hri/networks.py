@@ -10,7 +10,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 import pbdlib_torch as pbd_torch
 import pbdlib as pbd
 
-from utils import *
+from rmdn_hri.utils import *
 
 class RMDVAE(nn.Module):
 	def __init__(self, input_dim:int, output_dim:int, args:argparse.ArgumentParser) -> None:
@@ -29,7 +29,7 @@ class RMDVAE(nn.Module):
 		self.human_encoder = nn.Sequential(*enc_layers)
 		self.human_mean_w = nn.Parameter(torch.Tensor(args.latent_dim, 3))
 		self.human_mean_b = nn.Parameter(torch.Tensor(args.latent_dim, 3))
-		self.human_std = nn.Parameter(torch.Tensor(1, args.latent_dim, 3)) 
+		self.human_logstd = nn.Parameter(torch.Tensor(1, args.latent_dim, 3)) 
 
 		self.human_rnn = nn.GRU(input_size=enc_sizes[-1], hidden_size=enc_sizes[-1], num_layers=1, batch_first=True)
 		self.segment_logits = nn.Linear(enc_sizes[-1], 3) # reach, transfer, retreat
@@ -53,7 +53,7 @@ class RMDVAE(nn.Module):
 		self.reset_parameters()
 
 	def reset_parameters(self):
-		nn.init.ones_(self.human_std)
+		nn.init.zeros_(self.human_logstd)
 		nn.init.kaiming_uniform_(self.human_mean_w)
 		nn.init.kaiming_uniform_(self.human_mean_b)
 		
@@ -61,6 +61,7 @@ class RMDVAE(nn.Module):
 	def forward(self, x_in:torch.Tensor, x_out:torch.Tensor=None) -> (torch.Tensor,torch.Tensor,torch.Tensor):
 		h_enc = self.human_encoder(x_in)
 		h_mean = self.human_mean_w[None] * h_enc[...,None] + self.human_mean_b
+		h_std = self.human_logstd.exp() + self.std_reg
 		
 		h_rnn, _ = self.human_rnn(h_enc)
 		h_alpha = self.segment_logits(h_rnn)
@@ -85,7 +86,7 @@ class RMDVAE(nn.Module):
 		h_alpha_sample = gumbel_rao(h_alpha, k=100, temp=0.01)
 		if self.training:
 			eps = torch.randn((self.mce_samples,)+h_mean.shape[:-1], device=x_in.device)
-			r_samples_h = (h_mean*h_alpha_sample[:, None]).sum(-1) + eps * (self.human_std*h_alpha_sample[:, None]).sum(-1)
+			r_samples_h = (h_mean*h_alpha_sample[:, None]).sum(-1) + eps * (h_std*h_alpha_sample[:, None]).sum(-1)
 		else:
 			r_samples_h = (h_mean*h_alpha_sample[:, None]).sum(-1)
 		r_out_h = self.robot_decoder(r_samples_h)
@@ -102,8 +103,6 @@ class RMDVAE(nn.Module):
 		for i, (x_in, x_out, label) in enumerate(iterator):
 			if self.training:
 				optimizer.zero_grad()
-				with torch.no_grad():
-					self.human_std.copy_(nn.Softplus()(self.human_std)) + 1e-6
 
 			label_dist = np.array([np.sum(label[0].numpy()==0), np.sum(label[0].numpy()==1), np.sum(label[0].numpy()==2)])
 			w = 1/label_dist
@@ -114,8 +113,10 @@ class RMDVAE(nn.Module):
 			label_onehot = torch.eye(3, device=device)[label[0]]
 			label = torch.Tensor(label[0]).to(device)
 			h_mean, h_alpha, r_mean, r_std, r_out_r, r_out_h = self(x_in, x_out)
+			h_std = self.human_logstd.exp() + self.std_reg
+
 			
-			kld = kl_divergence(Normal(r_mean, r_std), Normal((h_mean*label_onehot[:, None]).sum(-1), (self.human_std*label_onehot[:, None]).sum(-1))).mean(-1)
+			kld = kl_divergence(Normal(r_mean, r_std), Normal((h_mean*label_onehot[:, None]).sum(-1), (h_std*label_onehot[:, None]).sum(-1))).mean(-1)
 			
 			ae_recon = ((r_out_r - x_out)**2).sum(-1)
 			pred_mse = ((r_out_h - x_out)**2).sum(-1)

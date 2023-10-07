@@ -96,7 +96,7 @@ def training_argparse(args=None):
 	# Results and Paths
 	parser.add_argument('--results', type=str, default='./logs/debug',#+datetime.datetime.now().strftime("%m%d%H%M"),
 						help='Path for saving results (default: ./logs/results/MMDDHHmm).', metavar='RES')
-	parser.add_argument('--src', type=str, default='./data/data_raw.npz', metavar='SRC',
+	parser.add_argument('--src', type=str, default='./data/alap_dataset.npz', metavar='SRC',
 						help='Path to read training and testing data (default: ./data/data_raw.npz).')
 	parser.add_argument('--seed', type=int, default=np.random.randint(0,np.iinfo(np.int32).max), metavar='SEED',
 						help='Random seed for training (randomized by default).')

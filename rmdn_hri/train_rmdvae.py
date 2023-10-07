@@ -10,9 +10,9 @@ import numpy as np
 
 import os
 
-from utils import *
-from dataset import HumanHandoverDataset
-import networks
+from rmdn_hri.utils import *
+from rmdn_hri.dataset import AlapDataset
+import rmdn_hri.networks
 
 args = training_argparse()
 print('Random Seed',args.seed)
@@ -22,8 +22,8 @@ torch.autograd.set_detect_anomaly(True)
 
 
 print("Reading Data")
-train_iterator = DataLoader(HumanHandoverDataset(args, train=True), batch_size=1, shuffle=True)
-test_iterator = DataLoader(HumanHandoverDataset(args, train=False), batch_size=1, shuffle=False)
+train_iterator = DataLoader(AlapDataset(args, train=True), batch_size=1, shuffle=True)
+test_iterator = DataLoader(AlapDataset(args, train=False), batch_size=1, shuffle=False)
 
 print("Creating Paths")
 MODELS_FOLDER = os.path.join(args.results, "models")
@@ -42,7 +42,7 @@ if not os.path.exists(SUMMARIES_FOLDER):
 global_epochs = 0
 
 print("Creating Model and Optimizer")
-model = networks.RMDVAE(train_iterator.dataset.input_dims, train_iterator.dataset.output_dims, args).to(device)
+model = rmdn_hri.networks.RMDVAE(train_iterator.dataset.input_dims, train_iterator.dataset.output_dims, args).to(device)
 params = model.parameters()
 # torch.compile(model)
 named_params = model.named_parameters()
@@ -69,7 +69,7 @@ for epoch in range(global_epochs, args.epochs):
 	if epoch % 10 == 0 or epoch==args.epochs-1:
 		model.eval()
 		with torch.no_grad():
-			d_test = model.run_iteration(test_iterator, optimizer, args)
+			d_test = model.run_iteration(test_iterator, optimizer, args, epoch)
 		for k in d_train:
 			writer.add_scalar('train/'+k, torch.mean(d_train[k]), epoch)
 		for k in d_test:

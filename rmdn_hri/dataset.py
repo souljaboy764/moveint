@@ -29,6 +29,8 @@ class AlapDataset(Dataset):
 				p2_lhand_objdist = p2_lhand_trajs - object_trajs[i]
 
 				p1r_p2l_dist = p2_lhand_trajs - p1_rhand_trajs
+				p1r_p2l_vels = np.diff(p1r_p2l_dist, axis=0, prepend=p1r_p2l_dist[0:1])
+
 
 				self.input_data.append(np.concatenate([
 										p2_rhand_trajs, 
@@ -37,7 +39,8 @@ class AlapDataset(Dataset):
 										p2_lhand_vels, 
 										# p1_rhand_objdist, 
 										# p2_lhand_objdist, 
-										# p1r_p2l_dist,
+										p1r_p2l_dist,
+										p1r_p2l_vels,
 									], axis=-1))
 				
 				self.output_data.append(np.concatenate([

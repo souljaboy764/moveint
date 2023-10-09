@@ -12,6 +12,85 @@ import pbdlib as pbd
 
 from rmdn_hri.utils import *
 
+
+class RMDN(nn.Module):
+	def __init__(self, input_dim:int, output_dim:int, args:argparse.ArgumentParser) -> None:
+		super().__init__()
+		self.input_dim = input_dim
+		self.output_dim = output_dim
+		for key in args.__dict__:
+			setattr(self, key, args.__dict__[key])
+		self.activation = getattr(nn, args.__dict__['activation'])()
+	
+		enc_sizes = [self.input_dim] + self.hidden_sizes
+		enc_layers = []
+		for i in range(len(enc_sizes)-1):
+			enc_layers.append(nn.Linear(enc_sizes[i], enc_sizes[i+1]))
+			enc_layers.append(self.activation)
+		self.human_encoder = nn.Sequential(*enc_layers)
+
+		head_sizes = [enc_sizes[-1]] + self.hidden_sizes + [args.num_components*self.output_dim]
+		mean_layers = []
+		logstd_layers = []
+		for i in range(len(head_sizes)-1):
+			mean_layers.append(nn.Linear(head_sizes[i], head_sizes[i+1]))
+			mean_layers.append(self.activation)
+			logstd_layers.append(nn.Linear(head_sizes[i], head_sizes[i+1]))
+			logstd_layers.append(self.activation)
+		self.human_mean = nn.Sequential(*mean_layers)
+		self.human_logstd = nn.Sequential(*logstd_layers)
+		
+		self.human_rnn = nn.GRU(input_size=enc_sizes[-1], hidden_size=head_sizes[-1], num_layers=len(head_sizes)-1, batch_first=True)
+		self.segment_logits = nn.Sequential(nn.Linear(head_sizes[-1], args.num_components), nn.Softmax(-1))
+
+	def forward(self, x_in:torch.Tensor, x_out:torch.Tensor=None) -> (torch.Tensor,torch.Tensor,torch.Tensor):
+		h_enc = self.human_encoder(x_in)
+		h_mean = self.human_mean(h_enc).reshape((-1, self.num_components, self.output_dim))
+		h_std = self.human_logstd(h_enc).reshape((-1, self.num_components, self.output_dim)).exp() + self.std_reg
+		
+		h_rnn, _ = self.human_rnn(h_enc)
+		h_alpha = self.segment_logits(h_rnn)
+
+		return h_mean, h_std, h_alpha
+	
+	# def forward_step(self:BaseNet, x:torch.Tensor, hidden:torch.Tensor=None) -> (torch.Tensor,torch.Tensor,torch.Tensor,torch.Tensor):
+	# 	enc, hidden = self._encoder(hidden)
+	# 	return self.policy(enc), self.policy_std(enc).exp() + self.std_reg, self.segment_logits(enc), hidden
+
+	def run_iteration(self, iterator:DataLoader, optimizer:torch.optim.Optimizer, args:argparse.ArgumentParser, epoch:int):
+		mse_loss, bce_loss, ae_loss, kl_loss = [], [], [], []
+		
+		for it, (x_in, x_out, label) in enumerate(iterator):
+			if self.training:
+				optimizer.zero_grad()
+
+			x_in = torch.Tensor(x_in[0]).to(device)
+			x_out = torch.Tensor(x_out[0]).to(device)
+			h_mean, h_std, h_alpha = self(x_in, x_out)
+			
+			nll = -(Normal(h_mean, h_std).log_prob(x_out[:,None,:]).exp()*h_alpha[..., None]).sum(1).log().sum(-1)
+			
+			interclass_dist = []
+			for i in range(self.num_components-1):
+				for j in range(i+1, self.num_components):
+					interclass_dist.append(torch.exp(-((h_mean[:, i] - h_mean[:, j])**2).sum(-1))[None])
+
+			intraclass_dist = torch.exp(-((torch.diff(h_mean, dim=0, prepend=h_mean[0:1]))**2).sum(-2)).mean(-1)
+			kld = (h_alpha * torch.log(h_alpha)).sum(-1) + intraclass_dist - torch.vstack(interclass_dist).sum(0)
+			if it==0:
+				mse_loss = nll
+				kl_loss = kld
+			else:
+				mse_loss = torch.cat([mse_loss, nll])
+				kl_loss = torch.cat([kl_loss, kld])
+				
+			loss = nll + self.beta*kld
+			loss = loss.mean()
+			if self.training:
+				loss.backward()
+				optimizer.step()
+		return {'pred_mse':mse_loss, 'kl_loss':kl_loss}
+
 class RMDVAE(nn.Module):
 	def __init__(self, input_dim:int, output_dim:int, args:argparse.ArgumentParser) -> None:
 		super().__init__()
@@ -32,7 +111,8 @@ class RMDVAE(nn.Module):
 		self.human_logstd = nn.Parameter(torch.Tensor(1, args.latent_dim, 3)) 
 
 		self.human_rnn = nn.GRU(input_size=enc_sizes[-1], hidden_size=enc_sizes[-1], num_layers=1, batch_first=True)
-		self.segment_logits = nn.Linear(enc_sizes[-1], 3) # reach, transfer, retreat
+		# self.segment_logits = nn.Linear(enc_sizes[-1], 3) # reach, transfer, retreat
+		self.segment_logits = nn.Sequential(nn.Linear(enc_sizes[-1], 3), nn.Softmax(-1))
 
 		enc_sizes = [self.output_dim] + self.hidden_sizes
 		enc_layers = []
@@ -83,12 +163,12 @@ class RMDVAE(nn.Module):
 			r_out_r = None
 
 		# h_alpha_sample = torch.distributions.categorical.Categorical(probs=alpha).sample()
-		h_alpha_sample = gumbel_rao(h_alpha, k=100, temp=0.01)
+		# h_alpha_sample = gumbel_rao(h_alpha, k=100, temp=0.01)
 		if self.training:
 			eps = torch.randn((self.mce_samples,)+h_mean.shape[:-1], device=x_in.device)
-			r_samples_h = (h_mean*h_alpha_sample[:, None]).sum(-1) + eps * (h_std*h_alpha_sample[:, None]).sum(-1)
+			r_samples_h = (h_mean*h_alpha[:, None]).sum(-1) + eps * (h_std*h_alpha[:, None]).sum(-1)
 		else:
-			r_samples_h = (h_mean*h_alpha_sample[:, None]).sum(-1)
+			r_samples_h = (h_mean*h_alpha[:, None]).sum(-1)
 		r_out_h = self.robot_decoder(r_samples_h)
 
 		return h_mean, h_alpha, r_mean, r_std, r_out_r, r_out_h
@@ -114,9 +194,9 @@ class RMDVAE(nn.Module):
 			label = torch.Tensor(label[0]).to(device)
 			h_mean, h_alpha, r_mean, r_std, r_out_r, r_out_h = self(x_in, x_out)
 			h_std = self.human_logstd.exp() + self.std_reg
-
+			# h_alpha = nn.Softmax(-1)(h_alpha)
 			
-			kld = kl_divergence(Normal(r_mean, r_std), Normal((h_mean*label_onehot[:, None]).sum(-1), (h_std*label_onehot[:, None]).sum(-1))).mean(-1)
+			kld = kl_divergence(Normal(r_mean, r_std), Normal((h_mean*h_alpha[:, None]).sum(-1), (h_std*h_alpha[:, None]).sum(-1))).mean(-1)
 			
 			ae_recon = ((r_out_r - x_out)**2).sum(-1)
 			pred_mse = ((r_out_h - x_out)**2).sum(-1)
@@ -133,10 +213,11 @@ class RMDVAE(nn.Module):
 			intraclass_dist = torch.exp(-((torch.diff(h_mean, dim=0, prepend=h_mean[0:1]))**2).sum(-2)).mean(-1)
 			
 			kld += intraclass_dist - interclass_dist
-			if self.training:
-				bce = F.binary_cross_entropy_with_logits(h_alpha, label_onehot, weight=w, reduction='none').sum(-1)
-			else:
-				bce = (h_alpha.argmax(1) == label).to(float)
+			bce = (h_alpha * torch.log(h_alpha)).sum(-1)
+			# if self.training:
+			# 	bce = F.binary_cross_entropy_with_logits(h_alpha, label_onehot, weight=w, reduction='none').sum(-1)
+			# else:
+			# 	bce = (h_alpha.argmax(1) == label).to(float)
 
 			if i==0:
 				mse_loss = pred_mse

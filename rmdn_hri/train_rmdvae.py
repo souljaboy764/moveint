@@ -42,7 +42,7 @@ if not os.path.exists(SUMMARIES_FOLDER):
 global_epochs = 0
 
 print("Creating Model and Optimizer")
-model = rmdn_hri.networks.RMDVAE(train_iterator.dataset.input_dims, train_iterator.dataset.output_dims, args).to(device)
+model = rmdn_hri.networks.RMDN(train_iterator.dataset.input_dims, train_iterator.dataset.output_dims, args).to(device)
 params = model.parameters()
 # torch.compile(model)
 named_params = model.named_parameters()

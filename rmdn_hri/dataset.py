@@ -31,21 +31,31 @@ class AlapDataset(Dataset):
 				p1r_p2l_dist = p2_lhand_trajs - p1_rhand_trajs
 				p1r_p2l_vels = np.diff(p1r_p2l_dist, axis=0, prepend=p1r_p2l_dist[0:1])
 
+				min_dist_idx = np.linalg.norm(p1r_p2l_dist, axis=-1).argmin()
+				goals_idx = np.ones(p2_lhand_trajs.shape[0])
+				goals_idx[self.labels[i]==0] = min_dist_idx
+				goals_idx[self.labels[i]==1] = min_dist_idx
+				goals_idx[self.labels[i]==2] = -1
+
+				goals_idx = goals_idx.astype(int)
+
 
 				self.input_data.append(np.concatenate([
-										p2_rhand_trajs, 
+										# p2_rhand_trajs, 
 										p2_lhand_trajs, 
-										p2_rhand_vels, 
+										# p2_rhand_vels, 
 										p2_lhand_vels, 
 										# p1_rhand_objdist, 
 										# p2_lhand_objdist, 
-										p1r_p2l_dist,
-										p1r_p2l_vels,
+										# p1r_p2l_dist,
+										# p1r_p2l_vels,
 									], axis=-1))
 				
 				self.output_data.append(np.concatenate([
 										p1_rhand_trajs, 
 										p1_lhand_trajs,
+										p1_rhand_trajs[goals_idx],
+										p1_lhand_trajs[goals_idx],
 										# p1_rhand_vels, 
 										# p1_lhand_vels,
 									], axis=-1))

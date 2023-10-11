@@ -11,7 +11,7 @@ import numpy as np
 import os
 
 from rmdn_hri.utils import *
-from rmdn_hri.dataset import AlapDataset
+from rmdn_hri.dataset import *
 import rmdn_hri.networks
 
 args = training_argparse()
@@ -22,8 +22,8 @@ torch.autograd.set_detect_anomaly(True)
 
 
 print("Reading Data")
-train_iterator = DataLoader(AlapDataset(args, train=True), batch_size=1, shuffle=True)
-test_iterator = DataLoader(AlapDataset(args, train=False), batch_size=1, shuffle=False)
+train_iterator = DataLoader(UnimanualDataset(args, train=True), batch_size=1, shuffle=True)
+test_iterator = DataLoader(UnimanualDataset(args, train=False), batch_size=1, shuffle=False)
 
 print("Creating Paths")
 MODELS_FOLDER = os.path.join(args.results, "models")

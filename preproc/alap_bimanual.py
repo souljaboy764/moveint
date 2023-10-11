@@ -100,16 +100,16 @@ test_dirs = ['P27_P28', 'P29_P30']
 
 train_files = []
 for d in train_dirs:
-	files = glob.glob(f'data/Bimanual Handovers Dataset/{d}/OptiTrack_Global_Frame/*double*.csv')
+	files = glob.glob(f'data/Bimanual Handovers Dataset/{d}/OptiTrack_Global_Frame/*single*.csv')
 	files.sort()
 	train_files += files
 train_data = preproc_files_list(train_files)
 
 test_files = []
 for d in test_dirs:
-	files = glob.glob(f'data/Bimanual Handovers Dataset/{d}/OptiTrack_Global_Frame/*double*.csv')
+	files = glob.glob(f'data/Bimanual Handovers Dataset/{d}/OptiTrack_Global_Frame/*single*.csv')
 	files.sort()
 	test_files += files
 test_data = preproc_files_list(test_files)
 
-np.savez_compressed('data/alap_dataset.npz', train_data=train_data, test_data=test_data, joints=joints)
+np.savez_compressed('data/alap_dataset_singlehand.npz', train_data=train_data, test_data=test_data, joints=joints)

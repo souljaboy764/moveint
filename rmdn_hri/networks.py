@@ -53,9 +53,15 @@ class RMDN(nn.Module):
 
 		return h_mean, h_std, h_alpha
 	
-	# def forward_step(self:BaseNet, x:torch.Tensor, hidden:torch.Tensor=None) -> (torch.Tensor,torch.Tensor,torch.Tensor,torch.Tensor):
-	# 	enc, hidden = self._encoder(hidden)
-	# 	return self.policy(enc), self.policy_std(enc).exp() + self.std_reg, self.segment_logits(enc), hidden
+
+	def forward_step(self, x_in:torch.Tensor, hidden:torch.Tensor=None) -> (torch.Tensor,torch.Tensor,torch.Tensor,torch.Tensor,torch.Tensor):
+		h_enc = self.human_encoder(x_in)
+		h_mean = self.human_mean(h_enc).reshape((-1, self.num_components, self.output_dim))
+		h_std = self.human_logstd(h_enc).reshape((-1, self.num_components, self.output_dim)).exp() + self.std_reg
+		
+		h_rnn, hidden = self.human_rnn(h_enc, hidden)
+		h_alpha = self.segment_logits(h_rnn)
+		return h_mean, h_std, h_alpha, hidden
 
 	def run_iteration(self, iterator:DataLoader, optimizer:torch.optim.Optimizer, args:argparse.ArgumentParser, epoch:int):
 		mse_loss, bce_loss, ae_loss, kl_loss = [], [], [], []

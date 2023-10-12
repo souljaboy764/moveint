@@ -54,10 +54,10 @@ class UnimanualDataset(Dataset):
 		for i in range(len(p1_trajs)):
 			robot_rhand_trajs = np.array([joint_angle_extraction(p1_trajs[i][t, -3:]) for t in range(p1_trajs[i].shape[0])])
 			
-			p1_rhand_trajs[:, :, 0] *= -1
-			p1_rhand_trajs[:, :, 1] *= -1
-			p1_rhand_trajs -= p1_rhand_trajs[0:1, -3] # right shoulder as origin
-			p2_rhand_trajs = p2_trajs[i][:, -1]
+			p2_trajs[i][:, :, 0] *= -1
+			p2_trajs[i][:, :, 1] *= -1
+			p2_trajs[i] -= p2_trajs[i][0:1, -3] # right shoulder as origin
+			p2_rhand_trajs = p2_trajs[i][:, -3:].reshape((-1, 9))
 			p2_rhand_vels = np.diff(p2_rhand_trajs, axis=0, prepend=p2_rhand_trajs[0:1])
 			
 			# p1r_p2l_dist = p2_rhand_trajs - p1_rhand_trajs

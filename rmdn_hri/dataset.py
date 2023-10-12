@@ -57,7 +57,7 @@ class UnimanualDataset(Dataset):
 			p2_trajs[i][:, :, 0] *= -1
 			p2_trajs[i][:, :, 1] *= -1
 			p2_trajs[i] -= p2_trajs[i][0:1, -3] # right shoulder as origin
-			p2_rhand_trajs = p2_trajs[i][:, -3:].reshape((-1, 9))
+			p2_rhand_trajs = p2_trajs[i][::4, -3:].reshape((-1, 9))
 			p2_rhand_vels = np.diff(p2_rhand_trajs, axis=0, prepend=p2_rhand_trajs[0:1])
 			
 			# p1r_p2l_dist = p2_rhand_trajs - p1_rhand_trajs
@@ -76,7 +76,7 @@ class UnimanualDataset(Dataset):
 									p2_rhand_vels, 
 								], axis=-1))
 			
-			self.output_data.append(robot_rhand_trajs)
+			self.output_data.append(robot_rhand_trajs[::4])
 		self.input_data = np.array(self.input_data, dtype=object)
 		self.output_data = np.array(self.output_data, dtype=object)
 		self.input_dims = self.input_data[0].shape[-1]

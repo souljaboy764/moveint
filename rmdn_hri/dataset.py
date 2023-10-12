@@ -3,6 +3,7 @@ import numpy as np
 from torch.utils.data import Dataset
 
 from mild_hri.transformations import *
+from mild_hri.dataloaders import *
 
 def angle(a,b):
 	dot = np.dot(a,b)
@@ -52,19 +53,22 @@ class UnimanualDataset(Dataset):
 		self.output_data = []
 		for i in range(len(p1_trajs)):
 			robot_rhand_trajs = np.array([joint_angle_extraction(p1_trajs[i][t, -3:]) for t in range(p1_trajs[i].shape[0])])
-			p1_rhand_trajs = p1_trajs[i][:, -1]
+			
+			p1_rhand_trajs[:, :, 0] *= -1
+			p1_rhand_trajs[:, :, 1] *= -1
+			p1_rhand_trajs -= p1_rhand_trajs[0:1, -3] # right shoulder as origin
 			p2_rhand_trajs = p2_trajs[i][:, -1]
-			p2_rhand_vels = np.diff(p1_rhand_trajs, axis=0, prepend=p1_rhand_trajs[0:1])
+			p2_rhand_vels = np.diff(p2_rhand_trajs, axis=0, prepend=p2_rhand_trajs[0:1])
 			
-			p1r_p2l_dist = p2_rhand_trajs - p1_rhand_trajs
+			# p1r_p2l_dist = p2_rhand_trajs - p1_rhand_trajs
 			
-			min_dist_idx = np.linalg.norm(p1r_p2l_dist, axis=-1).argmin()
-			goals_idx = np.ones(p2_rhand_vels.shape[0])
-			goals_idx[self.labels[i]==0] = min_dist_idx
-			goals_idx[self.labels[i]==1] = min_dist_idx
-			goals_idx[self.labels[i]==2] = -1
+			# min_dist_idx = np.linalg.norm(p1r_p2l_dist, axis=-1).argmin()
+			# goals_idx = np.ones(p2_rhand_vels.shape[0])
+			# goals_idx[self.labels[i]==0] = min_dist_idx
+			# goals_idx[self.labels[i]==1] = min_dist_idx
+			# goals_idx[self.labels[i]==2] = -1
 
-			goals_idx = goals_idx.astype(int)
+			# goals_idx = goals_idx.astype(int)
 
 
 			self.input_data.append(np.concatenate([
@@ -83,7 +87,7 @@ class UnimanualDataset(Dataset):
 		return self.len
 
 	def __getitem__(self, index):
-		return self.input_data[index], self.output_data[index], self.labels[index]
+		return self.input_data[index], self.output_data[index]
 
 
 # P1 - Giver, P2 - Receiver. Currently commented out object trajectories due to inconsistency in object marker location. Can be mitigated as post-processing but haven't done that yet.
@@ -125,9 +129,9 @@ class BimanualDataset(Dataset):
 
 
 				self.input_data.append(np.concatenate([
-										# p2_rhand_trajs, 
+										p2_rhand_trajs, 
 										p2_lhand_trajs, 
-										# p2_rhand_vels, 
+										p2_rhand_vels, 
 										p2_lhand_vels, 
 										# p1_rhand_objdist, 
 										# p2_lhand_objdist, 
@@ -138,8 +142,8 @@ class BimanualDataset(Dataset):
 				self.output_data.append(np.concatenate([
 										p1_rhand_trajs, 
 										p1_lhand_trajs,
-										p1_rhand_trajs[goals_idx],
-										p1_lhand_trajs[goals_idx],
+										# p1_rhand_trajs[goals_idx],
+										# p1_lhand_trajs[goals_idx],
 										# p1_rhand_vels, 
 										# p1_lhand_vels,
 									], axis=-1))
@@ -154,4 +158,4 @@ class BimanualDataset(Dataset):
 		return self.len
 
 	def __getitem__(self, index):
-		return self.input_data[index], self.output_data[index], self.labels[index]
+		return self.input_data[index], self.output_data[index]

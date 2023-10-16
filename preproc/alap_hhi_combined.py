@@ -51,12 +51,6 @@ def preproc_files_list(files):
 			p1_traj = np.array(p1_traj, dtype=np.float32)
 			p2_traj = np.array(p2_traj, dtype=np.float32)
 			object_traj = np.array(object_traj, dtype=np.float32)
-			# R = rotation_normalization([p2_traj[0, joints_dic["Hip"]], p2_traj[0, joints_dic["LShoulder"]], p2_traj[0, joints_dic["RShoulder"]]])
-			# R = np.eye(3)
-			# for t in range(p1_traj.shape[0]):
-			# 	p1_traj[t] = R.dot(p1_traj[t].T).T
-			# 	p2_traj[t] = R.dot(p2_traj[t].T).T
-			# object_traj = R.dot(object_traj.T).T
 
 			if p1_traj[0, joints_dic["LHand"], 0] > p2_traj[0, joints_dic["RHand"], 0]:
 				p1_traj[:, :, 0] *= -1
@@ -68,25 +62,19 @@ def preproc_files_list(files):
 				object_traj[:, 1] *= -1
 
 			origin = p1_traj[0:1, joints_dic["Hip"]].copy()
-			offset = np.array([1,0,0.3])
 			for t in range(p1_traj.shape[0]):
-				p1_traj[t] = p1_traj[t] - origin + offset
+				p1_traj[t] = p1_traj[t] - origin
 				p2_traj[t] = p2_traj[t] - origin
-			object_traj = object_traj - origin + offset
-
-			p1_traj[:, :, 0] *= 0.5
-			object_traj[:, 0] *= 0.5
-
-			p2_traj[:, :, 0] += 0.1
-			p2_traj[:, :, 2] *= 1.2
-			p2_traj[:, :, 2] += 0.1
+			object_traj = object_traj - origin
 
 			p1_trajs.append(p1_traj)
 			p2_trajs.append(p2_traj)
 			object_trajs.append(object_traj)
 			labels.append(np.array(label, dtype=int))
 		except Exception as e:
-			print(f'Error encountered: {e.__str__()}\nSkipping file {f_csv}')
+			# print(f'Error encountered: {e.__str__()}\nSkipping file {f_csv}')
+			continue
+		print(os.path.basename(f_csv))
 	p1_trajs = np.array(p1_trajs, dtype=object)
 	p2_trajs = np.array(p2_trajs, dtype=object)
 	object_trajs = np.array(object_trajs, dtype=object)
@@ -100,6 +88,10 @@ test_dirs = ['P27_P28', 'P29_P30']
 
 train_files = []
 for d in train_dirs:
+	files = glob.glob(f'data/Bimanual Handovers Dataset/{d}/OptiTrack_Global_Frame/*double*.csv')
+	files.sort()
+	train_files += files
+for d in train_dirs:
 	files = glob.glob(f'data/Bimanual Handovers Dataset/{d}/OptiTrack_Global_Frame/*single*.csv')
 	files.sort()
 	train_files += files
@@ -107,9 +99,13 @@ train_data = preproc_files_list(train_files)
 
 test_files = []
 for d in test_dirs:
+	files = glob.glob(f'data/Bimanual Handovers Dataset/{d}/OptiTrack_Global_Frame/*double*.csv')
+	files.sort()
+	test_files += files
+for d in test_dirs:
 	files = glob.glob(f'data/Bimanual Handovers Dataset/{d}/OptiTrack_Global_Frame/*single*.csv')
 	files.sort()
 	test_files += files
 test_data = preproc_files_list(test_files)
 
-np.savez_compressed('data/alap_dataset_singlehand.npz', train_data=train_data, test_data=test_data, joints=joints)
+np.savez_compressed('data/alap_dataset_combined.npz', train_data=train_data, test_data=test_data, joints=joints)

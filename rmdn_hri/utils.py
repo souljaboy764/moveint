@@ -1,3 +1,6 @@
+import torch
+from mild_hri.transformations import *
+
 import argparse
 import numpy as np
 
@@ -5,6 +8,41 @@ joints = ['Hip', 'Ab', 'Chest', 'Neck', 'Head', 'LShoulder', 'LUArm', 'LFArm', '
 joints_dic = {joints[i]:i for i in range(len(joints))}
 object_key = 'Rigid Body:object:Position'
 label_idx = {'reach':0, 'transfer':1, 'retreat':2}
+
+def angle(a,b):
+	dot = np.dot(a,b)
+	cos = dot/(np.linalg.norm(a)*np.linalg.norm(b))
+	if np.allclose(cos, 1):
+		cos = 1
+	elif np.allclose(cos, -1):
+		cos = -1
+	return np.arccos(cos)
+
+def joint_angle_extraction(skeleton): # Based on the Pepper Robot URDF, with the limits
+	# Recreating arm with upper and under arm
+	rightUpperArm = skeleton[1] - skeleton[0]
+	rightUnderArm = skeleton[2] - skeleton[1]
+
+
+	rightElbowAngle = np.clip(angle(rightUpperArm, rightUnderArm), 0.0087, 1.562)
+	
+	rightYaw = np.clip(np.arcsin(min(rightUpperArm[1],-0.0087)/np.linalg.norm(rightUpperArm)), -1.562, -0.0087)
+	
+	rightPitch = np.arctan2(max(rightUpperArm[0],0), rightUpperArm[2])
+	rightPitch -= np.pi/2 # Needed for pepper frame
+	
+	# Recreating under Arm Position with known Angles(without roll)
+	rightRotationAroundY = euler_matrix(0, rightPitch, 0,)[:3,:3]
+	rightRotationAroundX = euler_matrix(0, 0, rightYaw)[:3,:3]
+	rightElbowRotation = euler_matrix(0, 0, rightElbowAngle)[:3,:3]
+
+	rightUnderArmInZeroPos = np.array([np.linalg.norm(rightUnderArm), 0, 0.])
+	rightUnderArmWithoutRoll = np.dot(rightRotationAroundY,np.dot(rightRotationAroundX,np.dot(rightElbowRotation,rightUnderArmInZeroPos)))
+
+	# Calculating the angle betwenn actual under arm position and the one calculated without roll
+	rightRoll = angle(rightUnderArmWithoutRoll, rightUnderArm)
+
+	return np.array([rightPitch, rightYaw, rightRoll, rightElbowAngle]).astype(np.float32)
 
 """Implementation of the straight-through gumbel-rao estimator.
 https://github.com/nshepperd/gumbel-rao-pytorch/
@@ -31,8 +69,6 @@ estimator for any given outcome D converges to the expectation of
 ST-GS over G conditional on D.
 
 """
-
-import torch
 
 @torch.no_grad()
 def conditional_gumbel(logits, D, k=1):
@@ -96,25 +132,23 @@ def training_argparse(args=None):
 	# Results and Paths
 	parser.add_argument('--results', type=str, default='./logs/debug',#+datetime.datetime.now().strftime("%m%d%H%M"),
 						help='Path for saving results (default: ./logs/results/MMDDHHmm).', metavar='RES')
-	parser.add_argument('--src', type=str, default='./data/alap_dataset.npz', metavar='SRC',
-						help='Path to read training and testing data (default: ./data/data_raw.npz).')
 	parser.add_argument('--seed', type=int, default=np.random.randint(0,np.iinfo(np.int32).max), metavar='SEED',
 						help='Random seed for training (randomized by default).')
 	
 	# Input data shapers
-	parser.add_argument('--downsample', type=float, default=None, metavar='DOWNSAMPLE',
-						help='Factor for downsampling the data (default: None)')
+	parser.add_argument('--dataset', type=str, default='BuetepagePepper', metavar='DATSET',  choices=['HandoverHH', 'UnimanualHandover', 'BimanualHandover', 'BuetepageHH', 'BuetepageYumi', 'BuetepagePepper', 'NuiSIHH', 'NuiSIPepper'],
+						help='Dataset to use: HandoverHH, UnimanualHandover, BimanualHandover, BuetepageHH, BuetepageYumi, BuetepagePepper, NuiSIHH or NuiSIPepper (default: HandoverHH)')
 	
 	# Model args
-	parser.add_argument('--model', type=str, default='FeedFwdNet', metavar='MODEL', choices=['FeedFwdNet', 'MixtureDensityNet', 'GRUNet', 'GRUMixtureDensityNet'],
-						help='Which VAE to use: FeedFwdNet, MixtureDensityNet, GRUNet or GRUMixtureDensityNet (default: FeedFwdNet).')
+	parser.add_argument('--model', type=str, default='RMDVAE', metavar='MODEL', choices=['RMDN', 'RMDVAE'],
+						help='Which VAE to use: RMDN or RMDVAE (default: RMDN).')
 	parser.add_argument('--latent-dim', type=int, default=5, metavar='Z',
 						help='Latent space dimension (default: 5)')
-	parser.add_argument('--num-components', type=int, default=3, metavar='N_COMPONENTS',
+	parser.add_argument('--num-components', type=int, default=8, metavar='N_COMPONENTS',
 						help='Number of components to use in MDN predictions (default: 3).')
 	parser.add_argument('--std-reg', type=float, default=1e-6, metavar='EPS',
 						help='Positive value to add to standard deviation predictions (default: 1e-3)')
-	parser.add_argument('--hidden-sizes', default=[25,25], nargs='+', type=int,
+	parser.add_argument('--hidden-sizes', default=[40,20], nargs='+', type=int,
 			 			help='List of weights for the VAE layers (default: [250,150] )')
 	parser.add_argument('--ckpt', type=str, default=None, metavar='CKPT',
 						help='Checkpoint to resume training from (default: None)')
@@ -128,8 +162,8 @@ def training_argparse(args=None):
 						help='Number of epochs to train for (default: 200)')
 	parser.add_argument('--lr', type=float, default=5e-4, metavar='LR',
 						help='Starting Learning Rate (default: 5e-4)')
-	parser.add_argument('--mce-samples', type=int, default=5, metavar='MCE',
-						help='Number of Monte Carlo samples to draw (default: 5)')
-	parser.add_argument('--beta', type=float, default=0.005, metavar='BETA',
+	parser.add_argument('--mce-samples', type=int, default=10, metavar='MCE',
+						help='Number of Monte Carlo samples to draw (default: 10)')
+	parser.add_argument('--beta', type=float, default=0.001, metavar='BETA',
 						help='Scaling factor for KL divergence (default: 0.005)')
 	return parser.parse_args(args)

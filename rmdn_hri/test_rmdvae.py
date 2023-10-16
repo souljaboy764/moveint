@@ -12,9 +12,9 @@ import sklearn
 
 import os
 
-from utils import *
-from dataset import HumanHandoverDataset
-import networks
+from rmdn_hri.utils import *
+import rmdn_hri.dataset
+import rmdn_hri.networks
 
 parser = argparse.ArgumentParser(description='RMDVAE Testing')
 parser.add_argument('--ckpt', type=str, required=True, metavar='CKPT',
@@ -24,46 +24,43 @@ args = training_argparse()
 ckpt = torch.load(args.ckpt)
 training_args = ckpt['args']
 
-test_iterator = DataLoader(HumanHandoverDataset(training_args, train=False), batch_size=1, shuffle=False)
-
-model = networks.RMDVAE(test_iterator.dataset.input_dims, test_iterator.dataset.output_dims, training_args).to(device)
+test_iterator = DataLoader(getattr(rmdn_hri.dataset,training_args.dataset)(train=False), batch_size=1, shuffle=False)
+model = getattr(rmdn_hri.networks,args.model)(test_iterator.dataset.input_dims, test_iterator.dataset.output_dims, training_args).to(device)
 model.load_state_dict(ckpt['model'])
 model.eval()
-mse_loss = []
-hand_preds = []
-alpha_preds = []
-accuracy = []
-confusion_matrix = np.zeros((3, 3))
-for i, (x_in, x_out, label) in enumerate(test_iterator):
-	x_in = torch.Tensor(x_in[0]).to(device)
-	x_out = torch.Tensor(x_out[0]).to(device)
-	label = label[0]
+mse_loss = []#[] for i in test_iterator.dataset.actidx]
+# if True:
+for idx in test_iterator.dataset.dataset.actidx:
+	alpha_dist = []
+	mse_loss.append([])
+	# for i in range(len(test_iterator.dataset)):
+	for i in range(idx[0],idx[1]):
+		x_in, x_out = test_iterator.dataset.__getitem__(i)
+		x_in = torch.Tensor(x_in).to(device)
+		x_out = torch.Tensor(x_out).to(device)
+		with torch.no_grad():
+			h_mean, h_std, h_alpha, h_mean_combined, h_std_combined, r_mean, r_std, r_out_r, r_out_h, r_samples_h, r_samples_r = model(x_in, x_out)
 
-	with torch.no_grad():
-		h_mean, h_alpha, r_mean, r_std, r_out_r, r_out_h = model(x_in, None)
-	
-	pred_mse = ((r_out_h - x_out)**2).mean(-1)
-	hand_preds.append(r_out_h.cpu().numpy())
-	label_preds = h_alpha.argmax(1)
-	h_alpha = nn.Softmax(-1)(h_alpha)
-	threshold = 0.95
-	one_boundary = torch.logical_and(h_alpha[:, 0]<threshold, h_alpha[:, 1]>1-threshold)
-	two_boundary = torch.logical_and(h_alpha[:, 1]<threshold, h_alpha[:, 2]>1-threshold)
-	label_preds[one_boundary] = 1
-	label_preds[two_boundary] = 2
-	confusion_matrix += sklearn.metrics.confusion_matrix(label, label_preds.cpu().numpy())
-	accuracy.append(sklearn.metrics.accuracy_score(label, label_preds.cpu().numpy()))
+		h_alpha = F.one_hot(h_alpha.argmax(1), num_classes=training_args.num_components).sum(0)
+		alpha_dist.append(h_alpha)
+		
+		# BP/NuiSI HH
+		pred_mse = ((r_out_h - x_out)**2).reshape((x_out.shape[0], 5, 6, 3)).sum(-1).mean(-1).mean(-1).detach().cpu().numpy()
 
-	if i==0:
-		mse_loss = pred_mse
-	else:
-		mse_loss = torch.cat([mse_loss, pred_mse])
+		# # # Handover HH
+		# pred_mse = ((r_out_h - x_out)**2).reshape((x_out.shape[0], 5, 12, 3)).sum(-1).mean(-1).mean(-1).detach().cpu().numpy()
+		
+		# # BP/NuiSI Pepper
+		# pred_mse = ((r_out_h - x_out)**2).reshape((x_out.shape[0], 5, 4, 1)).sum(-1).mean(-1).mean(-1).detach().cpu().numpy()
+		
+		# # # BP/NuiSI Yumi
+		# pred_mse = ((r_out_h - x_out)**2).reshape((x_out.shape[0], 5, 7, 1)).sum(-1).mean(-1).mean(-1).detach().cpu().numpy()
 
-accuracy = np.vstack(accuracy)
-mse_loss = mse_loss.cpu().numpy()
-num_samples = accuracy.shape[0]
-# print(nn.Softmax(-1)(h_alpha))
-# print(label)
-print(confusion_matrix)
-print(accuracy.mean(), accuracy.std())
-print(mse_loss.mean(), mse_loss.std())
+		mse_loss[-1] += pred_mse.tolist()
+		# print(np.mean(pred_mse))
+	# print(torch.sum(torch.vstack(alpha_dist), 0))
+	mse_loss[-1] = np.array(mse_loss[-1])*100
+	# print('')
+
+	# print(mse_loss[-1].shape)
+	print(f'{np.mean(mse_loss[-1]):.3f} $\pm$ {np.std(mse_loss[-1]):.3f}')

@@ -11,7 +11,7 @@ import numpy as np
 import os
 
 from rmdn_hri.utils import *
-from rmdn_hri.dataset import *
+import rmdn_hri.dataset
 import rmdn_hri.networks
 
 args = training_argparse()
@@ -22,8 +22,11 @@ torch.autograd.set_detect_anomaly(True)
 
 
 print("Reading Data")
-train_iterator = DataLoader(UnimanualDataset(args, train=True), batch_size=1, shuffle=True)
-test_iterator = DataLoader(UnimanualDataset(args, train=False), batch_size=1, shuffle=False)
+train_iterator = DataLoader(getattr(rmdn_hri.dataset,args.dataset)(train=True), batch_size=1, shuffle=True)
+test_iterator = DataLoader(getattr(rmdn_hri.dataset,args.dataset)(train=False), batch_size=1, shuffle=False)
+
+print(train_iterator.dataset.input_dims, train_iterator.dataset.output_dims)
+print(test_iterator.dataset.input_dims, test_iterator.dataset.output_dims)
 
 print("Creating Paths")
 MODELS_FOLDER = os.path.join(args.results, "models")
@@ -42,7 +45,7 @@ if not os.path.exists(SUMMARIES_FOLDER):
 global_epochs = 0
 
 print("Creating Model and Optimizer")
-model = rmdn_hri.networks.RMDN(train_iterator.dataset.input_dims, train_iterator.dataset.output_dims, args).to(device)
+model = getattr(rmdn_hri.networks,args.model)(train_iterator.dataset.input_dims, train_iterator.dataset.output_dims, args).to(device)
 params = model.parameters()
 # torch.compile(model)
 named_params = model.named_parameters()
@@ -51,7 +54,7 @@ if args.ckpt is not None:
 	ckpt = torch.load(args.ckpt)
 	model.load_state_dict(ckpt['model'])
 	optimizer.load_state_dict(ckpt['optimizer'])
-	global_epochs = ckpt['epoch']
+	# global_epochs = ckpt['epoch']
 
 print("Building Writer")
 writer = SummaryWriter(SUMMARIES_FOLDER)

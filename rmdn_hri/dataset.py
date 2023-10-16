@@ -1,49 +1,13 @@
 import numpy as np
 
 from torch.utils.data import Dataset
-
-from mild_hri.transformations import *
 from mild_hri.dataloaders import *
-
-def angle(a,b):
-	dot = np.dot(a,b)
-	cos = dot/(np.linalg.norm(a)*np.linalg.norm(b))
-	if np.allclose(cos, 1):
-		cos = 1
-	elif np.allclose(cos, -1):
-		cos = -1
-	return np.arccos(cos)
-
-def joint_angle_extraction(skeleton): # Based on the Pepper Robot URDF, with the limits
-	# Recreating arm with upper and under arm
-	rightUpperArm = skeleton[1] - skeleton[0]
-	rightUnderArm = skeleton[2] - skeleton[1]
-
-
-	rightElbowAngle = np.clip(angle(rightUpperArm, rightUnderArm), 0.0087, 1.562)
-	
-	rightYaw = np.clip(np.arcsin(min(rightUpperArm[1],-0.0087)/np.linalg.norm(rightUpperArm)), -1.562, -0.0087)
-	
-	rightPitch = np.arctan2(max(rightUpperArm[0],0), rightUpperArm[2])
-	rightPitch -= np.pi/2 # Needed for pepper frame
-	
-	# Recreating under Arm Position with known Angles(without roll)
-	rightRotationAroundY = euler_matrix(0, rightPitch, 0,)[:3,:3]
-	rightRotationAroundX = euler_matrix(0, 0, rightYaw)[:3,:3]
-	rightElbowRotation = euler_matrix(0, 0, rightElbowAngle)[:3,:3]
-
-	rightUnderArmInZeroPos = np.array([np.linalg.norm(rightUnderArm), 0, 0.])
-	rightUnderArmWithoutRoll = np.dot(rightRotationAroundY,np.dot(rightRotationAroundX,np.dot(rightElbowRotation,rightUnderArmInZeroPos)))
-
-	# Calculating the angle betwenn actual under arm position and the one calculated without roll
-	rightRoll = angle(rightUnderArmWithoutRoll, rightUnderArm)
-
-	return np.array([rightPitch, rightYaw, rightRoll, rightElbowAngle]).astype(np.float32)
+from rmdn_hri.utils import *
 
 # P1 - Giver, P2 - Receiver. Currently commented out object trajectories due to inconsistency in object marker location. Can be mitigated as post-processing but haven't done that yet.
-class UnimanualDataset(Dataset):
-	def __init__(self, args, train):
-		with np.load(args.src, allow_pickle=True) as data:
+class UnimanualHandover(Dataset):
+	def __init__(self, train, window_length=5):
+		with np.load('data/alap_dataset_unimanual.npz', allow_pickle=True) as data:
 			if train:
 				p1_trajs, p2_trajs, object_trajs, self.labels = data['train_data']
 			else:
@@ -91,9 +55,9 @@ class UnimanualDataset(Dataset):
 
 
 # P1 - Giver, P2 - Receiver. Currently commented out object trajectories due to inconsistency in object marker location. Can be mitigated as post-processing but haven't done that yet.
-class BimanualDataset(Dataset):
-	def __init__(self, args, train):
-		with np.load(args.src, allow_pickle=True) as data:
+class BimanualKobo(Dataset):
+	def __init__(self, train, window_length=5):
+		with np.load('data/alap_dataset_bimanual.npz', allow_pickle=True) as data:
 			if train:
 				p1_trajs, p2_trajs, object_trajs, self.labels = data['train_data']
 			else:
@@ -103,32 +67,32 @@ class BimanualDataset(Dataset):
 			self.input_data = []
 			self.output_data = []
 			for i in range(len(p1_trajs)):
-				p1_rhand_trajs = p1_trajs[i][:, joints_dic['RHand']]
-				p1_lhand_trajs = p1_trajs[i][:, joints_dic['LHand']]
-				p2_rhand_trajs = p2_trajs[i][:, joints_dic['RHand']]
-				p2_lhand_trajs = p2_trajs[i][:, joints_dic['LHand']]
+				p1_rhand_trajs = p1_trajs[i][::4, joints_dic['RHand']]
+				p1_lhand_trajs = p1_trajs[i][::4, joints_dic['LHand']]
+				p2_rhand_trajs = p2_trajs[i][::4, joints_dic['RHand']]
+				p2_lhand_trajs = p2_trajs[i][::4, joints_dic['LHand']]
 
 				p1_rhand_vels = np.diff(p1_rhand_trajs, axis=0, prepend=p1_rhand_trajs[0:1])
 				p1_lhand_vels = np.diff(p1_lhand_trajs, axis=0, prepend=p1_lhand_trajs[0:1])
 				p2_rhand_vels = np.diff(p2_rhand_trajs, axis=0, prepend=p2_rhand_trajs[0:1])
 				p2_lhand_vels = np.diff(p2_lhand_trajs, axis=0, prepend=p2_lhand_trajs[0:1])
 
-				p1_rhand_objdist = p1_rhand_trajs - object_trajs[i]
-				p2_lhand_objdist = p2_lhand_trajs - object_trajs[i]
+				# p1_rhand_objdist = p1_rhand_trajs - object_trajs[i]
+				# p2_lhand_objdist = p2_lhand_trajs - object_trajs[i]
 
-				p1r_p2l_dist = p2_lhand_trajs - p1_rhand_trajs
-				p1r_p2l_vels = np.diff(p1r_p2l_dist, axis=0, prepend=p1r_p2l_dist[0:1])
+				# p1r_p2l_dist = p2_lhand_trajs - p1_rhand_trajs
+				# p1r_p2l_vels = np.diff(p1r_p2l_dist, axis=0, prepend=p1r_p2l_dist[0:1])
 
-				min_dist_idx = np.linalg.norm(p1r_p2l_dist, axis=-1).argmin()
-				goals_idx = np.ones(p2_lhand_trajs.shape[0])
-				goals_idx[self.labels[i]==0] = min_dist_idx
-				goals_idx[self.labels[i]==1] = min_dist_idx
-				goals_idx[self.labels[i]==2] = -1
+				# min_dist_idx = np.linalg.norm(p1r_p2l_dist, axis=-1).argmin()
+				# goals_idx = np.ones(p2_lhand_trajs.shape[0])
+				# goals_idx[self.labels[i]==0] = min_dist_idx
+				# goals_idx[self.labels[i]==1] = min_dist_idx
+				# goals_idx[self.labels[i]==2] = -1
 
-				goals_idx = goals_idx.astype(int)
+				# goals_idx = goals_idx.astype(int)
 
 
-				self.input_data.append(np.concatenate([
+				input_traj = np.concatenate([
 										p2_rhand_trajs, 
 										p2_lhand_trajs, 
 										p2_rhand_vels, 
@@ -137,21 +101,30 @@ class BimanualDataset(Dataset):
 										# p2_lhand_objdist, 
 										# p1r_p2l_dist,
 										# p1r_p2l_vels,
-									], axis=-1))
+									], axis=-1)
 				
-				self.output_data.append(np.concatenate([
+				output_traj = np.concatenate([
 										p1_rhand_trajs, 
 										p1_lhand_trajs,
 										# p1_rhand_trajs[goals_idx],
 										# p1_lhand_trajs[goals_idx],
 										# p1_rhand_vels, 
 										# p1_lhand_vels,
-									], axis=-1))
+									], axis=-1)
+				
+				seq_len = p1_rhand_trajs.shape[0]
+				input_dim = input_traj.shape[-1]
+				output_dim = output_traj.shape[-1]
+				idx = np.array([np.arange(i,i+window_length) for i in range(seq_len + 1 - 2*window_length)])
+				self.input_data.append(input_traj[idx].reshape((seq_len + 1 - 2*window_length, window_length*input_dim)))
+				idx = np.array([np.arange(i,i+window_length) for i in range(window_length, seq_len + 1 - window_length)])
+				self.output_data.append(output_traj[idx].reshape((seq_len + 1 - 2*window_length, window_length*output_dim)))
 
 			self.input_data = np.array(self.input_data, dtype=object)
 			self.output_data = np.array(self.output_data, dtype=object)
 			self.input_dims = self.input_data[0].shape[-1]
 			self.output_dims = self.output_data[0].shape[-1]
+
 			self.len = len(self.input_data)
 			
 	def __len__(self):
@@ -159,3 +132,117 @@ class BimanualDataset(Dataset):
 
 	def __getitem__(self, index):
 		return self.input_data[index], self.output_data[index]
+	
+class HandoverHH:
+	# mode: 1 - unimanual, 2 - bimanual, 3 - both
+	def __init__(self, train, mode=3, window_length=5):
+		with np.load('data/alap_dataset_combined.npz', allow_pickle=True) as data:
+			if train:
+				p1_trajs, p2_trajs, _, _ = data['train_data']
+				self.actidx = np.array([[0,105], [105, 168]])
+			else:
+				p1_trajs, p2_trajs, _, _ = data['test_data']
+				self.actidx = np.array([[0,12], [12, 24]])
+			joints = data['joints']
+
+		joints_dic = {joints[i]:i for i in range(len(joints))}
+		joints_idx = [joints_dic[i] for i in ['LUArm', 'LFArm', 'LHand', 'RUArm', 'RFArm', 'RHand']]
+		self.input_data = []
+		self.output_data = []
+		for i in range(len(p1_trajs)):
+			p1_pos = p1_trajs[i][::4, joints_idx]
+			p1_pos = p1_pos.reshape((p1_pos.shape[0], 3*len(joints_idx)))
+			p2_pos = p2_trajs[i][::4, joints_idx]
+			p2_pos = p2_pos.reshape((p2_pos.shape[0], 3*len(joints_idx)))
+
+			p1_vel = np.diff(p1_pos, axis=0, prepend=p1_pos[0:1])
+			p2_vel = np.diff(p2_pos, axis=0, prepend=p2_pos[0:1])
+
+			p1_traj = np.hstack([p1_pos, p1_vel])
+			p2_traj = np.hstack([p2_pos, p2_vel])
+			
+			input_dim = output_dim = p1_traj.shape[-1]
+			seq_len = p1_traj.shape[0]
+			idx = np.array([np.arange(i,i+window_length) for i in range(seq_len + 1 - 2*window_length)])
+			self.input_data.append(p2_traj[idx].reshape((seq_len + 1 - 2*window_length, window_length*input_dim)))
+			idx = np.array([np.arange(i,i+window_length) for i in range(window_length, seq_len + 1 - window_length)])
+			self.output_data.append(p1_traj[idx].reshape((seq_len + 1 - 2*window_length, window_length*output_dim)))
+
+		self.input_data = np.array(self.input_data, dtype=object)
+		self.output_data = np.array(self.output_data, dtype=object)
+		self.input_dims = self.input_data[0].shape[-1]
+		self.output_dims = self.output_data[0].shape[-1]
+
+		self.len = len(self.input_data)
+
+	def __len__(self):
+		return self.len
+
+	def __getitem__(self, index):
+		return self.input_data[index], self.output_data[index]
+
+class BuetepageHH:
+	def __init__(self, train):
+		self.dataset = buetepage.HHWindowDataset('/home/vignesh/playground/mild_hri/data/buetepage/traj_data.npz', train=train, window_length=5, downsample = 0.2)
+		self.input_dims = self.output_dims = self.dataset.traj_data[0].shape[-1]//2
+
+	def __len__(self):
+		return self.dataset.len
+		
+	def __getitem__(self, index):
+		traj_data, _ = self.dataset.__getitem__(index)
+		dims = traj_data.shape[-1]
+		return traj_data[:, :dims//2], traj_data[:, dims//2:]
+	
+class BuetepageYumi:
+	def __init__(self, train):
+		self.dataset = buetepage_hr.YumiWindowDataset('/home/vignesh/playground/mild_hri/data/buetepage_hr/traj_data.npz', train=train, window_length=5, downsample = 0.2)
+		self.input_dims = self.dataset.traj_data[0].shape[-1] - 35
+		self.output_dims = 35
+
+	def __len__(self):
+		return self.dataset.len
+		
+	def __getitem__(self, index):
+		traj_data, _ = self.dataset.__getitem__(index)
+		return traj_data[:, :-35], traj_data[:, -35:]
+	
+class BuetepagePepper:
+	def __init__(self, train):
+		self.dataset = buetepage.PepperWindowDataset('/home/vignesh/playground/mild_hri/data/buetepage/traj_data.npz', train=train, window_length=5, downsample = 0.2)
+		print(self.dataset.traj_data[0].shape)
+		self.input_dims = self.dataset.traj_data[0].shape[-1] - 20
+		self.output_dims = 20
+
+	def __len__(self):
+		return self.dataset.len
+			
+	def __getitem__(self, index):
+		traj_data, _ = self.dataset.__getitem__(index)
+		return traj_data[:, :-20], traj_data[:, -20:]
+	
+class NuiSIHH:
+	def __init__(self, train):
+		self.dataset = nuisi.HHWindowDataset('/home/vignesh/playground/mild_hri/data/nuisi/traj_data.npz', train=train, window_length=5, downsample = 0.2)
+		self.input_dims = self.output_dims = self.dataset.traj_data[0].shape[-1]//2
+
+	def __len__(self):
+		return self.dataset.len
+					
+	def __getitem__(self, index):
+		traj_data, _ = self.dataset.__getitem__(index)
+		dims = traj_data.shape[-1]
+		return traj_data[:, :dims//2], traj_data[:, dims//2:]
+	
+class NuiSIPepper:
+	def __init__(self, train):
+		self.dataset = nuisi.PepperWindowDataset('/home/vignesh/playground/mild_hri/data/nuisi/traj_data.npz', train=train, window_length=5, downsample = 0.2)
+		self.input_dims = self.dataset.traj_data[0].shape[-1] - 20
+		self.output_dims = 20
+
+	def __len__(self):
+		return self.dataset.len
+			
+	def __getitem__(self, index):
+		traj_data, _ = self.dataset.__getitem__(index)
+		return traj_data[:, :-20], traj_data[:, -20:]

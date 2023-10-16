@@ -136,7 +136,7 @@ def training_argparse(args=None):
 						help='Random seed for training (randomized by default).')
 	
 	# Input data shapers
-	parser.add_argument('--dataset', type=str, default='BuetepagePepper', metavar='DATSET',  choices=['HandoverHH', 'UnimanualHandover', 'BimanualHandover', 'BuetepageHH', 'BuetepageYumi', 'BuetepagePepper', 'NuiSIHH', 'NuiSIPepper', 'HandoverKobo'],
+	parser.add_argument('--dataset', type=str, default='BuetepagePepper', metavar='DATSET',  #choices=['HandoverHH', 'UnimanualHandover', 'BimanualHandover', 'BuetepageHH', 'BuetepageYumi', 'BuetepagePepper', 'NuiSIHH', 'NuiSIPepper', 'HandoverKobo'],
 						help='Dataset to use: HandoverHH, UnimanualHandover, BimanualHandover, BuetepageHH, BuetepageYumi, BuetepagePepper, NuiSIHH or NuiSIPepper (default: HandoverHH)')
 	
 	# Model args

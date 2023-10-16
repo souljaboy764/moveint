@@ -15,4 +15,4 @@ CUDA_VISIBLE_DEVICES=2 nohup python3 rmdn_hri/train_rmdvae.py --results logs/cor
 CUDA_VISIBLE_DEVICES=3 nohup python3 rmdn_hri/train_rmdvae.py --results logs/corrected/alap_hh/rmdvae_combined_3comps/trial3/ --epochs 400 --num-components 3 --dataset HandoverHH --model RMDVAE --hidden-sizes 40 20 >> logs/corrected/alap_hh/rmdvae_combined_3comps/trial3/log.txt &
 
 
-CUDA_VISIBLE_DEVICES=0 nohup python3 rmdn_hri/train_rmdvae.py --results logs/corrected/kobo_leftin/rmdvae_combined_3comps/trial0/ --epochs 400 --num-components 3 --dataset HandoverHH --model RMDVAE --hidden-sizes 40 20 >> logs/corrected/kobo_leftin/rmdvae_combined_3comps/trial0/log.txt &
+CUDA_VISIBLE_DEVICES=0 nohup python3 rmdn_hri/train_rmdvae.py --results logs/corrected/kobo_leftin_bi_nowindow/rmdvae_combined_3comps/trial0/ --epochs 400 --num-components 3 --dataset HandoverKobo --model RMDVAE --hidden-sizes 40 20 >> logs/corrected/kobo_leftin_bi_nowindow/rmdvae_combined_3comps/trial0/log.txt &

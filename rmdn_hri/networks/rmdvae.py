@@ -70,9 +70,21 @@ class RMDVAE(nn.Module):
 
 		return h_mean, h_std, h_alpha, h_mean_combined, h_std_combined, r_mean, r_std, r_out_r, r_out_h, r_samples_h, r_samples_r
 	
-	# def forward_step(self:BaseNet, x:torch.Tensor, hidden:torch.Tensor=None) -> (torch.Tensor,torch.Tensor,torch.Tensor,torch.Tensor):
-	# 	enc, hidden = self._encoder(hidden)
-	# 	return self.policy(enc), self.policy_std(enc).exp() + self.std_reg, self.segment_logits(enc), hidden
+	def forward_step(self, x_in:torch.Tensor, hidden:torch.Tensor=None) -> (torch.Tensor,torch.Tensor,torch.Tensor,torch.Tensor,torch.Tensor):
+		h_mean, h_std, h_alpha, hidden = self.human_encoder.forward_step(x_in, hidden)
+		h_mean_combined = (h_mean*h_alpha[..., None]).sum(1)
+		h_std_combined = (h_std*h_alpha[..., None]).sum(1)
+
+		if self.training:
+			eps = torch.randn((self.mce_samples,)+h_mean_combined.shape, device=x_in.device)
+			r_samples_h = h_mean_combined + eps * h_std_combined
+		else:
+			r_samples_h = h_mean_combined
+
+		r_out_h = self.robot_decoder(r_samples_h)
+		r_out_components = self.robot_decoder(h_mean)
+
+		return h_mean, h_std, h_alpha, r_out_h, r_out_components, hidden
 
 	def run_iteration(self, iterator:DataLoader, optimizer:torch.optim.Optimizer, args:argparse.ArgumentParser, epoch:int):
 		mse_loss, ae_loss, kl_loss = [], [], []

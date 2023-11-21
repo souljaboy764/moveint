@@ -61,4 +61,4 @@ for idx in test_iterator.dataset.dataset.actidx:
         alphas.append(h_alpha.cpu().numpy())
             # r_traj_i.append(h_mean[:, i].cpu().numpy())
 
-np.savez_compressed('logs/samples/bp_hh.npz', xh=np.array(inputs, dtype=object), xr=np.array(outputs, dtype=object), xr_i=np.array(r_traj_i, dtype=object), zh=np.array(latents, dtype=object), alpha=np.array(alphas, dtype=object), xr_gt=np.array(gt, dtype=object))
+np.savez_compressed('logs/samples/bp_yumi.npz', xh=np.array(inputs, dtype=object), xr=np.array(outputs, dtype=object), xr_i=np.array(r_traj_i, dtype=object), zh=np.array(latents, dtype=object), alpha=np.array(alphas, dtype=object), xr_gt=np.array(gt, dtype=object))

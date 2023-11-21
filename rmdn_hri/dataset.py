@@ -57,7 +57,7 @@ class UnimanualHandover(Dataset):
 # P1 - Giver, P2 - Receiver. Currently commented out object trajectories due to inconsistency in object marker location. Can be mitigated as post-processing but haven't done that yet.
 class BimanualKobo(Dataset):
 	def __init__(self, train, window_length=5):
-		with np.load('data/alap_dataset_bimanual_kobo.npz', allow_pickle=True) as data:
+		with np.load('data/alap_dataset_bimanual_kobo_p2frame.npz', allow_pickle=True) as data:
 			if train:
 				p1_trajs, p2_trajs, object_trajs, self.labels = data['train_data']
 			else:
@@ -146,14 +146,16 @@ class HandoverHH:
 			joints = data['joints']
 
 		joints_dic = {joints[i]:i for i in range(len(joints))}
-		joints_idx = [joints_dic[i] for i in ['LUArm', 'LFArm', 'LHand', 'RUArm', 'RFArm', 'RHand']]
+		# joints_idx = [joints_dic[i] for i in ['LUArm', 'LFArm', 'LHand', 'RUArm', 'RFArm', 'RHand']]
+		p1_joints_idx = [joints_dic[i] for i in ['LHand', 'RHand']]
+		p2_joints_idx = [joints_dic[i] for i in ['LUArm', 'LFArm', 'LHand', 'RUArm', 'RFArm', 'RHand']]
 		self.input_data = []
 		self.output_data = []
 		for i in range(len(p1_trajs)):
-			p1_pos = p1_trajs[i][::4, joints_idx]
-			p1_pos = p1_pos.reshape((p1_pos.shape[0], 3*len(joints_idx)))
-			p2_pos = p2_trajs[i][::4, joints_idx]
-			p2_pos = p2_pos.reshape((p2_pos.shape[0], 3*len(joints_idx)))
+			p1_pos = p1_trajs[i][::4, p1_joints_idx]
+			p1_pos = p1_pos.reshape((p1_pos.shape[0], 3*len(p1_joints_idx)))
+			p2_pos = p2_trajs[i][::4, p2_joints_idx]
+			p2_pos = p2_pos.reshape((p2_pos.shape[0], 3*len(p2_joints_idx)))
 
 			p1_vel = np.diff(p1_pos, axis=0, prepend=p1_pos[0:1])
 			p2_vel = np.diff(p2_pos, axis=0, prepend=p2_pos[0:1])
@@ -185,24 +187,25 @@ class HandoverHH:
 class HandoverKobo:
 	# mode: 1 - unimanual, 2 - bimanual, 3 - both
 	def __init__(self, train, mode=3, window_length=5):
-		with np.load('data/alap_kobo_dual.npz', allow_pickle=True) as data:
+		with np.load('data/alap_dataset_combined_kobo.npz', allow_pickle=True) as data:
 			if train:
 				p1_trajs, p2_trajs, _, _ = data['train_data']
-				self.actidx = np.array([[0,105]])#, [105, 168]])
+				self.actidx = np.array([[0,105], [105, 168]])
 			else:
 				p1_trajs, p2_trajs, _, _ = data['test_data']
-				self.actidx = np.array([[0,12]])#, [12, 24]])
+				self.actidx = np.array([[0,12], [12, 24]])
 			joints = data['joints']
 
 		joints_dic = {joints[i]:i for i in range(len(joints))}
-		joints_idx = [joints_dic[i] for i in ['LHand', 'RHand']]
+		p1_joints_idx = [joints_dic[i] for i in ['LHand', 'RHand']]
+		p2_joints_idx = [joints_dic[i] for i in ['LUArm', 'LFArm', 'LHand', 'RUArm', 'RFArm', 'RHand']]
 		self.input_data = []
 		self.output_data = []
 		for i in range(len(p1_trajs)):
-			p1_pos = p1_trajs[i][::4, joints_idx]
-			p1_pos = p1_pos.reshape((p1_pos.shape[0], 3*len(joints_idx)))
-			p2_pos = p2_trajs[i][::4, joints_dic['LHand']]
-			p2_pos = p2_pos.reshape((p2_pos.shape[0], 3))
+			p1_pos = p1_trajs[i][::4, p1_joints_idx]
+			p1_pos = p1_pos.reshape((p1_pos.shape[0], 3*len(p1_joints_idx)))
+			p2_pos = p2_trajs[i][::4, p2_joints_idx]
+			p2_pos = p2_pos.reshape((p2_pos.shape[0], 3*len(p2_joints_idx)))
 
 			# p1_vel = np.diff(p1_pos, axis=0, prepend=p1_pos[0:1])
 			p2_vel = np.diff(p2_pos, axis=0, prepend=p2_pos[0:1])
@@ -211,9 +214,9 @@ class HandoverKobo:
 			p1_traj = p1_pos
 			p2_traj = np.hstack([p2_pos, p2_vel])
 			
-			input_dim = p2_traj.shape[-1]
-			output_dim = p1_traj.shape[-1]
-			seq_len = p1_traj.shape[0]
+			# input_dim = p2_traj.shape[-1]
+			# output_dim = p1_traj.shape[-1]
+			# seq_len = p1_traj.shape[0]
 			# idx = np.array([np.arange(i,i+window_length) for i in range(seq_len + 1 - 2*window_length)])
 			# self.input_data.append(p2_traj[idx].reshape((seq_len + 1 - 2*window_length, window_length*input_dim)))
 			# idx = np.array([np.arange(i,i+window_length) for i in range(window_length, seq_len + 1 - window_length)])

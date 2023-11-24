@@ -86,7 +86,8 @@ def preproc_files_list(files):
 			object_trajs.append(object_traj)
 			labels.append(np.array(label, dtype=int))
 		except Exception as e:
-			print(f'Error encountered: {e.__str__()}\nSkipping file {f_csv}')
+			# print(f'Error encountered: {e.__str__()}\nSkipping file {f_csv}')
+			pass
 	p1_trajs = np.array(p1_trajs, dtype=object)
 	p2_trajs = np.array(p2_trajs, dtype=object)
 	object_trajs = np.array(object_trajs, dtype=object)
@@ -103,10 +104,17 @@ for d in train_dirs:
 	files = glob.glob(f'data/Bimanual Handovers Dataset/{d}/OptiTrack_Global_Frame/*double*.csv')
 	files.sort()
 	train_files += files
+print(len(train_files))
 for d in train_dirs:
 	files = glob.glob(f'data/Bimanual Handovers Dataset/{d}/OptiTrack_Global_Frame/*single*.csv')
 	files.sort()
 	train_files += files
+for d in train_dirs:
+	files = glob.glob(f'data/Bimanual Handovers Dataset/{d}/OptiTrack_Global_Frame/*single*.csv')
+	files.sort()
+	train_files += files
+print(len(train_files))
+
 train_data = preproc_files_list(train_files)
 
 test_files = []
@@ -114,10 +122,12 @@ for d in test_dirs:
 	files = glob.glob(f'data/Bimanual Handovers Dataset/{d}/OptiTrack_Global_Frame/*double*.csv')
 	files.sort()
 	test_files += files
+print(len(test_files))
 for d in test_dirs:
 	files = glob.glob(f'data/Bimanual Handovers Dataset/{d}/OptiTrack_Global_Frame/*single*.csv')
 	files.sort()
 	test_files += files
 test_data = preproc_files_list(test_files)
+print(len(test_files))
 
 np.savez_compressed('data/alap_dataset_combined_kobo.npz', train_data=train_data, test_data=test_data, joints=joints)

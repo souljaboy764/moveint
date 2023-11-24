@@ -190,7 +190,7 @@ class HandoverKobo:
 		with np.load('data/alap_dataset_combined_kobo.npz', allow_pickle=True) as data:
 			if train:
 				p1_trajs, p2_trajs, _, _ = data['train_data']
-				self.actidx = np.array([[0,105], [105, 168]])
+				self.actidx = np.array([[0,105], [105, 231]])
 			else:
 				p1_trajs, p2_trajs, _, _ = data['test_data']
 				self.actidx = np.array([[0,12], [12, 24]])
@@ -214,16 +214,16 @@ class HandoverKobo:
 			p1_traj = p1_pos
 			p2_traj = np.hstack([p2_pos, p2_vel])
 			
-			# input_dim = p2_traj.shape[-1]
-			# output_dim = p1_traj.shape[-1]
-			# seq_len = p1_traj.shape[0]
-			# idx = np.array([np.arange(i,i+window_length) for i in range(seq_len + 1 - 2*window_length)])
-			# self.input_data.append(p2_traj[idx].reshape((seq_len + 1 - 2*window_length, window_length*input_dim)))
-			# idx = np.array([np.arange(i,i+window_length) for i in range(window_length, seq_len + 1 - window_length)])
-			# self.output_data.append(p1_traj[idx].reshape((seq_len + 1 - 2*window_length, window_length*output_dim)))
+			input_dim = p2_traj.shape[-1]
+			output_dim = p1_traj.shape[-1]
+			seq_len = p1_traj.shape[0]
+			idx = np.array([np.arange(i,i+window_length) for i in range(seq_len + 1 - 2*window_length)])
+			self.input_data.append(p2_traj[idx].reshape((seq_len + 1 - 2*window_length, window_length*input_dim)))
+			idx = np.array([np.arange(i,i+window_length) for i in range(window_length, seq_len + 1 - window_length)])
+			self.output_data.append(p1_traj[idx].reshape((seq_len + 1 - 2*window_length, window_length*output_dim)))
 
-			self.input_data.append(p2_traj)
-			self.output_data.append(p1_traj)
+			# self.input_data.append(p2_traj)
+			# self.output_data.append(p1_traj)
 
 		self.input_data = np.array(self.input_data, dtype=object)
 		self.output_data = np.array(self.output_data, dtype=object)

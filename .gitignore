@@ -161,4 +161,4 @@ cython_debug/
 
 .vscode/
 logs/
-data/
+data_raw/

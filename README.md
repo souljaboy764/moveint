@@ -6,11 +6,4 @@
 - Unzip it to the folder [`data`](data) so that you have the directory structure as "data/Bimanual Handovers Dataset"
 - Run [`data_extraction.py`](data_extraction.py)
 
-## TODOs
-
-- Implement Data Preproc
-- Implement Networks
-- Implement Training
-- Implement Testing
-- Implement Visualizers for latent distributions
-- Implement Visualizers for data and predictions
+Some example configurations for testing can be seen in `train.sh`

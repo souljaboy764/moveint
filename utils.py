@@ -1,48 +1,8 @@
 import torch
-from mild_hri.transformations import *
+from phd_utils.transformations import *
 
 import argparse
 import numpy as np
-
-joints = ['Hip', 'Ab', 'Chest', 'Neck', 'Head', 'LShoulder', 'LUArm', 'LFArm', 'LHand', 'RShoulder', 'RUArm', 'RFArm', 'RHand']
-joints_dic = {joints[i]:i for i in range(len(joints))}
-object_key = 'Rigid Body:object:Position'
-label_idx = {'reach':0, 'transfer':1, 'retreat':2}
-
-def angle(a,b):
-	dot = np.dot(a,b)
-	cos = dot/(np.linalg.norm(a)*np.linalg.norm(b))
-	if np.allclose(cos, 1):
-		cos = 1
-	elif np.allclose(cos, -1):
-		cos = -1
-	return np.arccos(cos)
-
-def joint_angle_extraction(skeleton): # Based on the Pepper Robot URDF, with the limits
-	# Recreating arm with upper and under arm
-	rightUpperArm = skeleton[1] - skeleton[0]
-	rightUnderArm = skeleton[2] - skeleton[1]
-
-
-	rightElbowAngle = np.clip(angle(rightUpperArm, rightUnderArm), 0.0087, 1.562)
-	
-	rightYaw = np.clip(np.arcsin(min(rightUpperArm[1],-0.0087)/np.linalg.norm(rightUpperArm)), -1.562, -0.0087)
-	
-	rightPitch = np.arctan2(max(rightUpperArm[0],0), rightUpperArm[2])
-	rightPitch -= np.pi/2 # Needed for pepper frame
-	
-	# Recreating under Arm Position with known Angles(without roll)
-	rightRotationAroundY = euler_matrix(0, rightPitch, 0,)[:3,:3]
-	rightRotationAroundX = euler_matrix(0, 0, rightYaw)[:3,:3]
-	rightElbowRotation = euler_matrix(0, 0, rightElbowAngle)[:3,:3]
-
-	rightUnderArmInZeroPos = np.array([np.linalg.norm(rightUnderArm), 0, 0.])
-	rightUnderArmWithoutRoll = np.dot(rightRotationAroundY,np.dot(rightRotationAroundX,np.dot(rightElbowRotation,rightUnderArmInZeroPos)))
-
-	# Calculating the angle betwenn actual under arm position and the one calculated without roll
-	rightRoll = angle(rightUnderArmWithoutRoll, rightUnderArm)
-
-	return np.array([rightPitch, rightYaw, rightRoll, rightElbowAngle]).astype(np.float32)
 
 """Implementation of the straight-through gumbel-rao estimator.
 https://github.com/nshepperd/gumbel-rao-pytorch/

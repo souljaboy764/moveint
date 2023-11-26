@@ -1,0 +1,6 @@
+torch
+numpy
+matplotlib
+tensorboard
+torch-tb-profiler
+ipympl

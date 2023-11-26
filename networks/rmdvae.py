@@ -7,6 +7,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 from rmdn_hri.utils import *
 from rmdn_hri.networks import RMDN
 
+# HRI VAE with a Recurrent Mixture Density Network as the Human Encoder and a stanrad VAE for the robot
 class RMDVAE(nn.Module):
 	def __init__(self, input_dim:int, output_dim:int, args:argparse.ArgumentParser) -> None:
 		super().__init__()

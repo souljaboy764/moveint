@@ -6,6 +6,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 from rmdn_hri.utils import *
 
+# Recurrent Mixture Density Network
 class RMDN(nn.Module):
 	def __init__(self, input_dim:int, output_dim:int, args:argparse.ArgumentParser) -> None:
 		super().__init__()

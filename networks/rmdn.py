@@ -3,8 +3,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torch.distributions import *
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-from rmdn_hri.utils import *
+import argparse
 
 # Recurrent Mixture Density Network
 class RMDN(nn.Module):

@@ -3,9 +3,8 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torch.distributions import *
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-from rmdn_hri.utils import *
-from rmdn_hri.networks import RMDN
+import argparse
+from rmdn import RMDN
 
 # HRI VAE with a Recurrent Mixture Density Network as the Human Encoder and a stanrad VAE for the robot
 class RMDVAE(nn.Module):

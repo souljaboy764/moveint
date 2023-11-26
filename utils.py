@@ -97,7 +97,7 @@ def training_argparse(args=None):
 	
 	# Input data shapers
 	parser.add_argument('--dataset', type=str, default='BuetepagePepper', metavar='DATSET',  #choices=['HandoverHH', 'UnimanualHandover', 'BimanualHandover', 'BuetepageHH', 'BuetepageYumi', 'BuetepagePepper', 'NuiSIHH', 'NuiSIPepper', 'HandoverKobo'],
-						help='Dataset to use: HandoverHH, UnimanualHandover, BimanualHandover, BuetepageHH, BuetepageYumi, BuetepagePepper, NuiSIHH or NuiSIPepper (default: HandoverHH)')
+						help='Dataset to use: HandoverHH, UnimanualPepper, HandoverKobo, BuetepageHH, BuetepageYumi, BuetepagePepper, NuiSIHH or NuiSIPepper (default: HandoverHH)')
 	
 	# Model args
 	parser.add_argument('--model', type=str, default='RMDVAE', metavar='MODEL', choices=['RMDN', 'RMDVAE'],

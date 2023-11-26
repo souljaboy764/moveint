@@ -70,7 +70,7 @@ class BuetepagePepper(buetepage.PepperWindowDataset):
 class NuiSIHH(nuisi.HHWindowDataset):
 	def __init__(self, train):
 		super().__init__(train=train, window_length=5, downsample = 0.2)
-		self.input_dims = self.output_dims = self.dataset.traj_data[0].shape[-1]//2
+		self.input_dims = self.output_dims = self.traj_data[0].shape[-1]//2
 
 	def __getitem__(self, index):
 		traj_data = self.traj_data[index].astype(np.float32)

@@ -50,7 +50,5 @@ python train_rmdvae.py --results path/to/handover_pepper_results --epochs 400 --
 The output of the below testing code is the Mean squared prediction error and standard deviation for each interaction in the dataset of the model that is being evaluated. To run the testing, simply run:
 
 ```bash
-python test.py --ckpt /path/to_ckpt
+python test_rmdvae.py --ckpt /path/to_ckpt
 ```
-
-To visualize the latent space learned by the mdoel, run the python notebook [`mse_plotter.ipynb`](mse_plotter.ipynb) which plots the first 3 latent coordinates as well as the Gaussians corresponding to the HMM state.

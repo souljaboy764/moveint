@@ -1,20 +1,14 @@
 import torch
-from torch import nn
 import torch.nn.functional as F
-from torch.distributions import kl_divergence, Normal
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 import numpy as np
-import sklearn
 
-import os
-
-from rmdn_hri.utils import *
-import rmdn_hri.dataset
-import rmdn_hri.networks
+from utils import *
+import dataset
+from networks import RMDVAE
 
 parser = argparse.ArgumentParser(description='RMDVAE Testing')
 parser.add_argument('--ckpt', type=str, required=True, metavar='CKPT',
@@ -24,13 +18,13 @@ args = training_argparse()
 ckpt = torch.load(args.ckpt)
 training_args = ckpt['args']
 
-test_iterator = DataLoader(getattr(rmdn_hri.dataset,training_args.dataset)(train=False), batch_size=1, shuffle=False)
-model = getattr(rmdn_hri.networks,args.model)(test_iterator.dataset.input_dims, test_iterator.dataset.output_dims, training_args).to(device)
+test_iterator = DataLoader(getattr(dataset,training_args.dataset)(train=False), batch_size=1, shuffle=False)
+model = RMDVAE(test_iterator.dataset.input_dims, test_iterator.dataset.output_dims, training_args).to(device)
 model.load_state_dict(ckpt['model'])
 model.eval()
 mse_loss = []#[] for i in test_iterator.dataset.actidx]
 # if True:
-for idx in test_iterator.dataset.dataset.actidx:
+for idx in test_iterator.dataset.actidx:
 	alpha_dist = []
 	mse_loss.append([])
 	# for i in range(len(test_iterator.dataset)):
@@ -45,21 +39,27 @@ for idx in test_iterator.dataset.dataset.actidx:
 		alpha_dist.append(h_alpha)
 		
 		# BP/NuiSI HH
-		pred_mse = ((r_out_h - x_out)**2).reshape((x_out.shape[0], 5, 6, 3)).sum(-1).mean(-1).mean(-1).detach().cpu().numpy()
+		if training_args.dataset=='NuiSIHH' or training_args.dataset =='BuetepageHH':
+			pred_mse = ((r_out_h - x_out)**2).reshape((x_out.shape[0], 5, 6, 3)).sum(-1).mean(-1).mean(-1).detach().cpu().numpy()
 
 		# # # Handover HH
-		# pred_mse = ((r_out_h - x_out)**2).reshape((x_out.shape[0], 5, 12, 3)).sum(-1).mean(-1).mean(-1).detach().cpu().numpy()
+		elif training_args.dataset=='HandoverHH':
+			pred_mse = ((r_out_h - x_out)**2).reshape((x_out.shape[0], 5, 12, 3)).sum(-1).mean(-1).mean(-1).detach().cpu().numpy()
 		
 		# # BP/NuiSI Pepper
-		# pred_mse = ((r_out_h - x_out)**2).reshape((x_out.shape[0], 5, 4, 1)).sum(-1).mean(-1).mean(-1).detach().cpu().numpy()
+		elif training_args.dataset=='NuiSIPepper' or training_args.dataset =='BuetepagePepper':
+			pred_mse = ((r_out_h - x_out)**2).reshape((x_out.shape[0], 5, 4, 1)).sum(-1).mean(-1).mean(-1).detach().cpu().numpy()
 		
 		# # # BP/NuiSI Yumi
-		# pred_mse = ((r_out_h - x_out)**2).reshape((x_out.shape[0], 5, 7, 1)).sum(-1).mean(-1).mean(-1).detach().cpu().numpy()
+		elif training_args.dataset =='BuetepageYumi':
+			pred_mse = ((r_out_h - x_out)**2).reshape((x_out.shape[0], 5, 7, 1)).sum(-1).mean(-1).mean(-1).detach().cpu().numpy()
 
 		mse_loss[-1] += pred_mse.tolist()
 		# print(np.mean(pred_mse))
 	# print(torch.sum(torch.vstack(alpha_dist), 0))
-	mse_loss[-1] = np.array(mse_loss[-1])*100
+	mse_loss[-1] = np.array(mse_loss[-1])
+	if training_args.dataset=='NuiSIHH' or training_args.dataset =='BuetepageHH' or training_args.dataset=='HandoverHH':
+		mse_loss[-1] *= 100
 	# print('')
 
 	# print(mse_loss[-1].shape)

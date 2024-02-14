@@ -13,6 +13,7 @@ Clone the repo `https://github.com/souljaboy764/phd_utils` and follow the instal
 ## Training
 
 ### Buetepage
+
 We use the same configuration for all of the Buetepage datasets, which can be trained using the following command:
 
 ```bash

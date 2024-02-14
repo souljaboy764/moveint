@@ -96,7 +96,7 @@ def training_argparse(args=None):
 						help='Random seed for training (randomized by default).')
 	
 	# Input data shapers
-	parser.add_argument('--dataset', type=str, default='BuetepagePepper', metavar='DATSET',  #choices=['HandoverHH', 'UnimanualHandover', 'BimanualHandover', 'BuetepageHH', 'BuetepageYumi', 'BuetepagePepper', 'NuiSIHH', 'NuiSIPepper', 'HandoverKobo'],
+	parser.add_argument('--dataset', type=str, default='BuetepageHH', metavar='DATSET',  #choices=['HandoverHH', 'UnimanualHandover', 'BimanualHandover', 'BuetepageHH', 'BuetepageYumi', 'BuetepagePepper', 'NuiSIHH', 'NuiSIPepper', 'HandoverKobo'],
 						help='Dataset to use: HandoverHH, UnimanualPepper, HandoverKobo, BuetepageHH, BuetepageYumi, BuetepagePepper, NuiSIHH or NuiSIPepper (default: HandoverHH)')
 	
 	# Model args
@@ -104,7 +104,7 @@ def training_argparse(args=None):
 						help='Which VAE to use: RMDN or RMDVAE (default: RMDN).')
 	parser.add_argument('--latent-dim', type=int, default=5, metavar='Z',
 						help='Latent space dimension (default: 5)')
-	parser.add_argument('--num-components', type=int, default=8, metavar='N_COMPONENTS',
+	parser.add_argument('--num-components', type=int, default=3, metavar='N_COMPONENTS',
 						help='Number of components to use in MDN predictions (default: 3).')
 	parser.add_argument('--std-reg', type=float, default=1e-6, metavar='EPS',
 						help='Positive value to add to standard deviation predictions (default: 1e-3)')

@@ -1,10 +1,14 @@
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from torch.distributions import *
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 import argparse
 from networks.rmdn import RMDN
+
+def kl_divergence(mu_p, std_p, mu_q, std_q):
+    var_ratio = (std_p / std_q).pow(2)
+    t1 = ((mu_p - mu_q) / std_q).pow(2)
+    return 0.5 * (var_ratio + t1 - 1 - var_ratio.log())
 
 # HRI VAE with a Recurrent Mixture Density Network as the Human Encoder and a stanrad VAE for the robot
 class RMDVAE(nn.Module):

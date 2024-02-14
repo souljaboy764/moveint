@@ -1,2 +1,2 @@
-from rmdn_hri.networks.rmdn import RMDN
-from rmdn_hri.networks.rmdvae import RMDVAE
+from networks.rmdn import RMDN
+from networks.rmdvae import RMDVAE

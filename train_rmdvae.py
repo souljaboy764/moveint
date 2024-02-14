@@ -10,7 +10,7 @@ import os
 
 from utils import *
 import dataset
-from networks import RMDVAE
+from networks.rmdvae import RMDVAE
 
 args = training_argparse()
 print('Random Seed',args.seed)

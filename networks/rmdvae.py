@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 from torch.distributions import *
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 import argparse
-from rmdn import RMDN
+from networks.rmdn import RMDN
 
 # HRI VAE with a Recurrent Mixture Density Network as the Human Encoder and a stanrad VAE for the robot
 class RMDVAE(nn.Module):
@@ -34,10 +34,10 @@ class RMDVAE(nn.Module):
 			dec_layers.append(self.activation)
 		self.robot_decoder = nn.Sequential(*dec_layers)
 
-	def forward(self, x_in:torch.Tensor, x_out:torch.Tensor=None) -> (torch.Tensor,torch.Tensor,torch.Tensor):
+	def forward(self, x_in:torch.Tensor, x_out:torch.Tensor=None) -> tuple[torch.Tensor,torch.Tensor,torch.Tensor]:
 		h_mean, h_std, h_alpha = self.human_encoder(x_in)
 		h_mean_combined = (h_mean*h_alpha[..., None]).sum(1)
-		h_std_combined = (h_std*h_alpha[..., None]).sum(1)
+		h_std_combined = (h_std.pow(2)*h_alpha[..., None]).sum(1).sqrt()
 
 		if x_out is not None:
 			r_enc = self.robot_encoder(x_out)
@@ -70,7 +70,7 @@ class RMDVAE(nn.Module):
 
 		return h_mean, h_std, h_alpha, h_mean_combined, h_std_combined, r_mean, r_std, r_out_r, r_out_h, r_samples_h, r_samples_r
 	
-	def forward_step(self, x_in:torch.Tensor, hidden:torch.Tensor=None) -> (torch.Tensor,torch.Tensor,torch.Tensor,torch.Tensor,torch.Tensor):
+	def forward_step(self, x_in:torch.Tensor, hidden:torch.Tensor=None) -> tuple[torch.Tensor,torch.Tensor,torch.Tensor,torch.Tensor,torch.Tensor]:
 		h_mean, h_std, h_alpha, hidden = self.human_encoder.forward_step(x_in, hidden)
 		h_mean_combined = (h_mean*h_alpha[..., None]).sum(1)
 		h_std_combined = (h_std*h_alpha[..., None]).sum(1)
@@ -98,7 +98,7 @@ class RMDVAE(nn.Module):
 			h_mean, h_std, h_alpha, h_mean_combined, h_std_combined, r_mean, r_std, r_out_r, r_out_h, r_samples_h, r_samples_r = self(x_in, x_out)
 			
 			# kld = (kl_divergence(Normal(r_mean[:, None], r_std[:, None]), Normal(h_mean, h_std))*h_alpha[..., None]).sum(1).mean(-1)
-			kld = kl_divergence(Normal(r_mean, r_std), Normal(h_mean_combined, h_std_combined)).mean(-1)
+			kld = kl_divergence(r_mean, r_std, h_mean_combined, h_std_combined).mean(-1)
 
 			
 			ae_recon = ((r_out_r - x_out)**2).sum(-1)

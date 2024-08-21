@@ -10,7 +10,7 @@ import os
 
 from utils import *
 import dataset
-from networks.rmdvae import RMDVAE
+from networks import MoVEInt
 
 args = training_argparse()
 print('Random Seed',args.seed)
@@ -42,7 +42,7 @@ if not os.path.exists(SUMMARIES_FOLDER):
 global_epochs = 0
 
 print("Creating Model and Optimizer")
-model = RMDVAE(train_iterator.dataset.input_dims, train_iterator.dataset.output_dims, args).to(device)
+model = MoVEInt(train_iterator.dataset.input_dims, train_iterator.dataset.output_dims, args).to(device)
 params = model.parameters()
 # torch.compile(model)
 named_params = model.named_parameters()

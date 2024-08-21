@@ -1,17 +1,69 @@
+from typing import Tuple
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 import argparse
-from networks.rmdn import RMDN
 
 def kl_divergence(mu_p, std_p, mu_q, std_q):
     var_ratio = (std_p / std_q).pow(2)
     t1 = ((mu_p - mu_q) / std_q).pow(2)
     return 0.5 * (var_ratio + t1 - 1 - var_ratio.log())
 
-# HRI VAE with a Recurrent Mixture Density Network as the Human Encoder and a stanrad VAE for the robot
-class RMDVAE(nn.Module):
+# Recurrent Mixture Density Network
+class RMDN(nn.Module):
+	def __init__(self, input_dim:int, output_dim:int, args:argparse.ArgumentParser) -> None:
+		super().__init__()
+		self.input_dim = input_dim
+		self.output_dim = output_dim
+		for key in args.__dict__:
+			setattr(self, key, args.__dict__[key])
+		self.activation = getattr(nn, args.__dict__['activation'])()
+	
+		enc_sizes = [self.input_dim] + self.hidden_sizes
+		enc_layers = []
+		for i in range(len(enc_sizes)-1):
+			enc_layers.append(nn.Linear(enc_sizes[i], enc_sizes[i+1]))
+			enc_layers.append(self.activation)
+		self.human_encoder = nn.Sequential(*enc_layers)
+
+		# head_sizes = [enc_sizes[-1]] + self.hidden_sizes + [args.num_components*self.output_dim]
+		head_sizes = [enc_sizes[-1], args.num_components*self.output_dim]
+		mean_layers = []
+		logstd_layers = []
+		for i in range(len(head_sizes)-1):
+			mean_layers.append(nn.Linear(head_sizes[i], head_sizes[i+1]))
+			mean_layers.append(self.activation)
+			logstd_layers.append(nn.Linear(head_sizes[i], head_sizes[i+1]))
+			logstd_layers.append(self.activation)
+		self.human_mean = nn.Sequential(*mean_layers)
+		self.human_logstd = nn.Sequential(*logstd_layers)
+		
+		self.human_rnn = nn.GRU(input_size=enc_sizes[-1], hidden_size=head_sizes[-1], num_layers=len(head_sizes)-1, batch_first=True)
+		self.segment_logits = nn.Sequential(nn.Linear(head_sizes[-1], args.num_components), nn.Softmax(-1))
+
+	def forward(self, x_in:torch.Tensor, x_out:torch.Tensor=None) -> Tuple[torch.Tensor,torch.Tensor,torch.Tensor]:
+		h_enc = self.human_encoder(x_in)
+		h_mean = self.human_mean(h_enc).reshape((-1, self.num_components, self.output_dim))
+		h_std = self.human_logstd(h_enc).reshape((-1, self.num_components, self.output_dim)).exp() + self.std_reg
+		
+		h_rnn, _ = self.human_rnn(h_enc)
+		h_alpha = self.segment_logits(h_rnn)
+
+		return h_mean, h_std, h_alpha
+	
+	def forward_step(self, x_in:torch.Tensor, hidden:torch.Tensor=None) -> Tuple[torch.Tensor,torch.Tensor,torch.Tensor,torch.Tensor,torch.Tensor]:
+		h_enc = self.human_encoder(x_in)
+		h_mean = self.human_mean(h_enc).reshape((-1, self.num_components, self.output_dim))
+		h_std = self.human_logstd(h_enc).reshape((-1, self.num_components, self.output_dim)).exp() + self.std_reg
+		
+		h_rnn, hidden = self.human_rnn(h_enc, hidden)
+		h_alpha = self.segment_logits(h_rnn)
+		return h_mean, h_std, h_alpha, hidden
+
+
+# HRI VAE with a Recurrent Mixture Density Network as the Human Encoder and a standard VAE for the robot
+class MoVEInt(nn.Module):
 	def __init__(self, input_dim:int, output_dim:int, args:argparse.ArgumentParser) -> None:
 		super().__init__()
 		self.input_dim = input_dim
@@ -38,7 +90,7 @@ class RMDVAE(nn.Module):
 			dec_layers.append(self.activation)
 		self.robot_decoder = nn.Sequential(*dec_layers)
 
-	def forward(self, x_in:torch.Tensor, x_out:torch.Tensor=None) -> tuple[torch.Tensor,torch.Tensor,torch.Tensor]:
+	def forward(self, x_in:torch.Tensor, x_out:torch.Tensor=None) -> Tuple[torch.Tensor,torch.Tensor,torch.Tensor]:
 		h_mean, h_std, h_alpha = self.human_encoder(x_in)
 		h_mean_combined = (h_mean*h_alpha[..., None]).sum(1)
 		h_std_combined = (h_std.pow(2)*h_alpha[..., None]).sum(1).sqrt()
@@ -74,7 +126,7 @@ class RMDVAE(nn.Module):
 
 		return h_mean, h_std, h_alpha, h_mean_combined, h_std_combined, r_mean, r_std, r_out_r, r_out_h, r_samples_h, r_samples_r
 	
-	def forward_step(self, x_in:torch.Tensor, hidden:torch.Tensor=None) -> tuple[torch.Tensor,torch.Tensor,torch.Tensor,torch.Tensor,torch.Tensor]:
+	def forward_step(self, x_in:torch.Tensor, hidden:torch.Tensor=None) -> Tuple[torch.Tensor,torch.Tensor,torch.Tensor,torch.Tensor,torch.Tensor]:
 		h_mean, h_std, h_alpha, hidden = self.human_encoder.forward_step(x_in, hidden)
 		h_mean_combined = (h_mean*h_alpha[..., None]).sum(1)
 		h_std_combined = (h_std*h_alpha[..., None]).sum(1)
@@ -101,9 +153,7 @@ class RMDVAE(nn.Module):
 			x_out = torch.Tensor(x_out[0]).to(device)
 			h_mean, h_std, h_alpha, h_mean_combined, h_std_combined, r_mean, r_std, r_out_r, r_out_h, r_samples_h, r_samples_r = self(x_in, x_out)
 			
-			# kld = (kl_divergence(Normal(r_mean[:, None], r_std[:, None]), Normal(h_mean, h_std))*h_alpha[..., None]).sum(1).mean(-1)
 			kld = kl_divergence(r_mean, r_std, h_mean_combined, h_std_combined).mean(-1)
-
 			
 			ae_recon = ((r_out_r - x_out)**2).sum(-1)
 			pred_mse = ((r_out_h - x_out)**2).sum(-1)

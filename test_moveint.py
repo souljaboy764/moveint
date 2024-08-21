@@ -8,9 +8,9 @@ import numpy as np
 
 from utils import *
 import dataset
-from networks import RMDVAE
+from networks import MoVEInt
 
-parser = argparse.ArgumentParser(description='RMDVAE Testing')
+parser = argparse.ArgumentParser(description='MoVEInt Testing')
 parser.add_argument('--ckpt', type=str, required=True, metavar='CKPT',
 						help='Checkpoint to evaluate')
 
@@ -19,7 +19,7 @@ ckpt = torch.load(args.ckpt)
 training_args = ckpt['args']
 
 test_iterator = DataLoader(getattr(dataset,training_args.dataset)(train=False), batch_size=1, shuffle=False)
-model = RMDVAE(test_iterator.dataset.input_dims, test_iterator.dataset.output_dims, training_args).to(device)
+model = MoVEInt(test_iterator.dataset.input_dims, test_iterator.dataset.output_dims, training_args).to(device)
 model.load_state_dict(ckpt['model'])
 model.eval()
 mse_loss = []#[] for i in test_iterator.dataset.actidx]

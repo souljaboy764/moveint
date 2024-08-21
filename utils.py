@@ -100,8 +100,6 @@ def training_argparse(args=None):
 						help='Dataset to use: HandoverHH, UnimanualPepper, HandoverKobo, BuetepageHH, BuetepageYumi, BuetepagePepper, NuiSIHH or NuiSIPepper (default: HandoverHH)')
 	
 	# Model args
-	parser.add_argument('--model', type=str, default='RMDVAE', metavar='MODEL', choices=['RMDN', 'RMDVAE'],
-						help='Which VAE to use: RMDN or RMDVAE (default: RMDN).')
 	parser.add_argument('--latent-dim', type=int, default=5, metavar='Z',
 						help='Latent space dimension (default: 5)')
 	parser.add_argument('--num-components', type=int, default=3, metavar='N_COMPONENTS',

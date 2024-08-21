@@ -1,5 +1,7 @@
 # MoVEInt: Mixture of Variational Experts for Learning Human-Robot Interactions from Demonstrations
 
+[Paper](https://arxiv.org/abs/2407.07636) [Website](https://bit.ly/MoVEInt) [ROS Package](https://github.com/souljaboy764/moveint_ros)
+
 ## Requirements
 
 Install the requirements in [`requirements.txt`](requirements.txt) by running
@@ -56,4 +58,14 @@ python test_moveint.py --ckpt /path/to_ckpt
 
 ## Citation
 
-If you used this repo to help your work, please [cite our paper](https://scholar.googleusercontent.com/scholar.bib?q=info:H49y67yaNEAJ:scholar.google.com/&output=citation&scisdr=ClEyOprRELbPj3TMsY8:AFWwaeYAAAAAZsXKqY-j-kLvbqCnHc_gAn7q-H0&scisig=AFWwaeYAAAAAZsXKqcGjhkwG2SEcwDSq-3YUYRc&scisf=4&ct=citation&cd=-1&hl=en)
+If you used this repo to help your work, please cite our paper:
+
+```latex
+@article{prasad2024moveint,
+  title={MoVEInt: Mixture of Variational Experts for Learning Human-Robot Interactions from Demonstrations},
+  author={Prasad, Vignesh and Kshirsagar, Alap and Stock-Homburg, Dorothea Koert Ruth and Peters, Jan and Chalvatzaki, Georgia},
+  journal={IEEE Robotics and Automation Letters},
+  year={2024},
+  publisher={IEEE}
+}
+```
